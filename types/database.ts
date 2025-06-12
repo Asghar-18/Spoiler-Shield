@@ -24,18 +24,24 @@ export type Database = {
           id: string;
           name: string | null;
           coverImage: string | null;
+          author: string | null;
+          description?: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           name?: string | null;
           coverImage?: string | null;
+          author: string | null;
+          description?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string | null;
           coverImage?: string | null;
+          author: string | null;
+          description?: string | null;
           created_at?: string;
         };
       };

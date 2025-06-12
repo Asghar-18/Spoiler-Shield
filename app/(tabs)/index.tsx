@@ -1,235 +1,467 @@
-// // app/(tabs)/index.tsx
-// import { useState, useEffect } from 'react';
+// import React, { useState, useEffect } from 'react';
 // import {
 //   View,
 //   Text,
-//   FlatList,
-//   TouchableOpacity,
 //   StyleSheet,
+//   ScrollView,
+//   TextInput,
+//   TouchableOpacity,
 //   Image,
 //   ActivityIndicator,
-//   TextInput,
+//   Alert,
+//   RefreshControl,
 // } from 'react-native';
-// import { router } from 'expo-router';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 // import { Ionicons } from '@expo/vector-icons';
-// import { supabase, Title } from '../../lib/supabase';
-// import { useAuthStore } from '../../store/authStore';
+// import { router } from 'expo-router';
+// import { authService, titlesService } from '@/services';
+// import type { Title } from '@/types/database';
+// import colors from '@/constants/colors';
+// import typography from '@/constants/typography';
+// import layout from '@/constants/layout';
 
-// export default function HomeScreen() {
-//   const [titles, setTitles] = useState<Title[]>([]);
-//   const [loading, setLoading] = useState(true);
+// export default function HomePage() {
+//   const [books, setBooks] = useState<Title[]>([]);
+//   const [filteredBooks, setFilteredBooks] = useState<Title[]>([]);
 //   const [searchQuery, setSearchQuery] = useState('');
-//   const { user } = useAuthStore();
+//   const [loading, setLoading] = useState(true);
+//   const [searchLoading, setSearchLoading] = useState(false);
+//   const [user, setUser] = useState<any>(null);
 
+//   // Check authentication and load books
 //   useEffect(() => {
-//     fetchTitles();
+//     checkUser();
+//     loadBooks();
 //   }, []);
 
-//   const fetchTitles = async () => {
-//     try {
-//       const { data, error } = await supabase
-//         .from('titles')
-//         .select('*')        
-//         .order('created_at', { ascending: false });
+//   // Handle search with debouncing
+//   useEffect(() => {
+//     const debounceTimer = setTimeout(() => {
+//       handleSearch();
+//     }, 300);
 
+//     return () => clearTimeout(debounceTimer);
+//   }, [searchQuery]);
+
+//   const checkUser = async () => {
+//     try {
+//       const { user, error } = await authService.getCurrentUser();
+//       if (error || !user) {
+//         router.replace('/auth' as any);
+//         return;
+//       }
+//       setUser(user);
+//     } catch (error) {
+//       console.error('Error checking user:', error);
+//       router.replace('/auth' as any);
+//     }
+//   };
+
+//   const loadBooks = async () => {
+//     try {
+//       setLoading(true);
+//       const { data, error } = await titlesService.getTitles();
+      
 //       if (error) {
-//         console.error('Error fetching titles:', error);
-//       } else {
-//         setTitles(data || []);
+//         Alert.alert('Error', 'Failed to load books');
+//         console.error('Error loading books:', error);
+//         return;
+//       }
+
+//       setBooks(data || []);
+//       // If no search query, show all books
+//       if (!searchQuery.trim()) {
+//         setFilteredBooks(data || []);
 //       }
 //     } catch (error) {
-//       console.error('Error:', error);
+//       console.error('Error in loadBooks:', error);
+//       Alert.alert('Error', 'Something went wrong');
 //     } finally {
 //       setLoading(false);
 //     }
 //   };
 
-//   const filteredTitles = titles.filter(title =>
-//     title.name.toLowerCase().includes(searchQuery.toLowerCase())
-//     // title.author?.toLowerCase().includes(searchQuery.toLowerCase())
-//   );
+//   const handleSearch = async () => {
+//     if (searchQuery.trim() === '') {
+//       setFilteredBooks(books);
+//       return;
+//     }
 
-//   const renderTitleItem = ({ item }: { item: Title }) => (
+//     try {
+//       setSearchLoading(true);
+//       const { data, error } = await titlesService.searchTitles(searchQuery.trim());
+      
+//       if (error) {
+//         console.error('Search error:', error);
+//         // Fallback to local filtering if search fails
+//         const localFiltered = books.filter(book =>
+//           book.name?.toLowerCase().includes(searchQuery.toLowerCase())
+//         );
+//         setFilteredBooks(localFiltered);
+//         return;
+//       }
+
+//       setFilteredBooks(data || []);
+//     } catch (error) {
+//       console.error('Error in handleSearch:', error);
+//       // Fallback to local filtering
+//       const localFiltered = books.filter(book =>
+//         book.name?.toLowerCase().includes(searchQuery.toLowerCase())
+//       );
+//       setFilteredBooks(localFiltered);
+//     } finally {
+//       setSearchLoading(false);
+//     }
+//   };
+
+//   const handleBookPress = (book: Title) => {
+//     router.push({
+//       pathname: '/book/[id]' as any,
+//       params: { 
+//         id: book.id,
+//         bookName: book.name || 'Untitled Book',
+//         coverImage: book.coverImage || ''
+//       }
+//     });
+//   };
+
+//   const handleLogout = async () => {
+//     try {
+//       const { error } = await authService.signOut();
+//       if (error) {
+//         Alert.alert('Error', 'Failed to sign out');
+//         return;
+//       }
+//       router.replace('/auth' as any);
+//     } catch (error) {
+//       console.error('Logout error:', error);
+//       Alert.alert('Error', 'Something went wrong');
+//     }
+//   };
+
+//   const clearSearch = () => {
+//     setSearchQuery('');
+//     setFilteredBooks(books);
+//   };
+
+//   const renderBookItem = ({ item: book }: { item: Title }) => (
 //     <TouchableOpacity
-//       style={styles.titleCard}
-//       onPress={() => router.push(`/novel/${item.id}` as any)}
+//       style={styles.bookItem}
+//       onPress={() => handleBookPress(book)}
+//       activeOpacity={0.7}
 //     >
-//       <Image
-//         source={{ uri: item.cover_image || 'https://via.placeholder.com/100x150' }}
-//         style={styles.coverImage}
-//         resizeMode="cover"
-//       />
-//       <View style={styles.titleInfo}>
-//         <Text style={styles.titleName} numberOfLines={2}>
-//           {item.name}
-//         </Text>
-//         {/*{item.author && (
-//           <Text style={styles.titleAuthor} numberOfLines={1}>
-//             by {item.author}
-//           </Text>
+//       <View style={styles.bookImageContainer}>
+//         {book.coverImage ? (
+//           <Image
+//             source={{ uri: book.coverImage }}
+//             style={styles.bookImage}
+//             resizeMode="cover"
+//           />
+//         ) : (
+//           <View style={styles.placeholderImage}>
+//             <Ionicons name="book" size={32} color={colors.textSecondary} />
+//           </View>
 //         )}
-//         {item.description && (
-//           <Text style={styles.titleDescription} numberOfLines={3}>
-//             {item.description}
-//           </Text>
-//         )} */}
 //       </View>
-//       <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+      
+//       <View style={styles.bookInfo}>
+//         <Text style={styles.bookTitle} numberOfLines={2}>
+//           {book.name || 'Untitled Book'}
+//         </Text>
+//         <Text style={styles.bookType}>Book</Text>
+//         <Text style={styles.bookDate}>
+//           Added {new Date(book.created_at).toLocaleDateString()}
+//         </Text>
+//       </View>
+      
+//       <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
 //     </TouchableOpacity>
 //   );
 
 //   if (loading) {
 //     return (
-//       <View style={styles.centerContainer}>
-//         <ActivityIndicator size="large" color="#007AFF" />
-//       </View>
+//       <SafeAreaView style={styles.container}>
+//         <View style={styles.loadingContainer}>
+//           <ActivityIndicator size="large" color={colors.primary} />
+//           <Text style={styles.loadingText}>Loading books...</Text>
+//         </View>
+//       </SafeAreaView>
 //     );
 //   }
 
 //   return (
-//     <View style={styles.container}>
+//     <SafeAreaView style={styles.container}>
+//       {/* Header */}
 //       <View style={styles.header}>
-//         <Text style={styles.headerTitle}>Your Library</Text>
-//         <Text style={styles.headerSubtitle}>
-//           Welcome back, {user?.name || 'Reader'}!
-//         </Text>
+//         <View style={styles.headerTop}>
+//           <Text style={styles.headerTitle}>Home</Text>
+//           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+//             <Ionicons name="log-out-outline" size={24} color={colors.textSecondary} />
+//           </TouchableOpacity>
+//         </View>
+        
+//         <Text style={styles.discoverTitle}>Discover</Text>
+//         <Text style={styles.discoverSubtitle}>Find stories to explore</Text>
 //       </View>
 
+//       {/* Search Bar */}
 //       <View style={styles.searchContainer}>
-//         <Ionicons name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
+//         <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
 //         <TextInput
 //           style={styles.searchInput}
 //           placeholder="Search books..."
 //           value={searchQuery}
 //           onChangeText={setSearchQuery}
+//           placeholderTextColor={colors.textSecondary}
 //         />
+//         {searchLoading && (
+//           <ActivityIndicator size="small" color={colors.primary} style={styles.searchLoader} />
+//         )}
+//         {searchQuery.length > 0 && !searchLoading && (
+//           <TouchableOpacity
+//             onPress={clearSearch}
+//             style={styles.clearButton}
+//           >
+//             <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+//           </TouchableOpacity>
+//         )}
 //       </View>
 
-//       <FlatList
-//         data={filteredTitles}
-//         renderItem={renderTitleItem}
-//         keyExtractor={(item) => item.id}
-//         contentContainerStyle={styles.listContainer}
-//         showsVerticalScrollIndicator={false}
-//         ListEmptyComponent={
-//           <View style={styles.emptyContainer}>
-//             <Ionicons name="book-outline" size={64} color="#C7C7CC" />
-//             <Text style={styles.emptyText}>No books found</Text>
-//             <Text style={styles.emptySubtext}>
-//               {searchQuery ? 'Try a different search term' : 'Books will appear here once added'}
-//             </Text>
+//       {/* Books Filter Tag */}
+//       <View style={styles.filterContainer}>
+//         <View style={styles.filterRow}>
+//           <View style={styles.activeFilter}>
+//             <Ionicons name="book" size={16} color={colors.card} />
+//             <Text style={styles.activeFilterText}>Books</Text>
 //           </View>
+//           {searchQuery.trim() && (
+//             <Text style={styles.resultCount}>
+//               {filteredBooks.length} result{filteredBooks.length !== 1 ? 's' : ''}
+//             </Text>
+//           )}
+//         </View>
+//       </View>
+
+//       {/* Books List */}
+//       <ScrollView 
+//         style={styles.booksContainer}
+//         showsVerticalScrollIndicator={false}
+//         contentContainerStyle={styles.booksContent}
+//         refreshControl={
+//           <RefreshControl
+//             refreshing={loading}
+//             onRefresh={loadBooks}
+//             colors={[colors.primary]}
+//             tintColor={colors.primary}
+//           />
 //         }
-//       />
-//     </View>
+//       >
+//         {filteredBooks.length === 0 ? (
+//           <View style={styles.emptyContainer}>
+//             <Ionicons name="book-outline" size={64} color={colors.border} />
+//             <Text style={styles.emptyTitle}>
+//               {searchQuery ? 'No books found' : 'No books available'}
+//             </Text>
+//             <Text style={styles.emptySubtitle}>
+//               {searchQuery 
+//                 ? 'Try adjusting your search terms' 
+//                 : 'Books will appear here once added'
+//               }
+//             </Text>
+//             {searchQuery && (
+//               <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+//                 <Text style={styles.clearSearchText}>Clear search</Text>
+//               </TouchableOpacity>
+//             )}
+//           </View>
+//         ) : (
+//           filteredBooks.map((book) => (
+//             <View key={book.id}>
+//               {renderBookItem({ item: book })}
+//             </View>
+//           ))
+//         )}
+//       </ScrollView>
+//     </SafeAreaView>
 //   );
 // }
 
 // const styles = StyleSheet.create({
 //   container: {
 //     flex: 1,
-//     backgroundColor: '#f5f5f5',
+//     backgroundColor: colors.background,
 //   },
-//   centerContainer: {
+//   loadingContainer: {
 //     flex: 1,
 //     justifyContent: 'center',
 //     alignItems: 'center',
 //   },
+//   loadingText: {
+//     ...typography.body,
+//     marginTop: layout.spacing.md,
+//   },
 //   header: {
-//     paddingTop: 60,
-//     paddingHorizontal: 20,
-//     paddingBottom: 20,
-//     backgroundColor: 'white',
+//     paddingHorizontal: layout.spacing.lg,
+//     paddingTop: layout.spacing.sm,
+//     paddingBottom: layout.spacing.lg,
+//     backgroundColor: colors.card,
+//   },
+//   headerTop: {
+//     flexDirection: 'row',
+//     justifyContent: 'space-between',
+//     alignItems: 'center',
+//     marginBottom: layout.spacing.lg,
 //   },
 //   headerTitle: {
-//     fontSize: 28,
-//     fontWeight: 'bold',
-//     color: '#333',
+//     ...typography.h4,
 //   },
-//   headerSubtitle: {
-//     fontSize: 16,
-//     color: '#666',
-//     marginTop: 5,
+//   logoutButton: {
+//     padding: layout.spacing.xs,
+//   },
+//   discoverTitle: {
+//     ...typography.h1,
+//     marginBottom: layout.spacing.xs,
+//   },
+//   discoverSubtitle: {
+//     ...typography.body,
+//     color: colors.textSecondary,
 //   },
 //   searchContainer: {
 //     flexDirection: 'row',
 //     alignItems: 'center',
-//     backgroundColor: 'white',
-//     marginHorizontal: 20,
-//     marginVertical: 15,
-//     paddingHorizontal: 15,
-//     borderRadius: 10,
-//     elevation: 2,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 1 },
+//     backgroundColor: colors.card,
+//     marginHorizontal: layout.spacing.lg,
+//     marginVertical: layout.spacing.md,
+//     paddingHorizontal: layout.spacing.md,
+//     paddingVertical: layout.spacing.md,
+//     borderRadius: layout.borderRadius.md,
+//     shadowColor: colors.shadow,
+//     shadowOffset: {
+//       width: 0,
+//       height: 2,
+//     },
 //     shadowOpacity: 0.1,
-//     shadowRadius: 2,
+//     shadowRadius: 3.84,
+//     elevation: 5,
 //   },
 //   searchIcon: {
-//     marginRight: 10,
+//     marginRight: layout.spacing.md,
 //   },
 //   searchInput: {
 //     flex: 1,
-//     paddingVertical: 12,
-//     fontSize: 16,
+//     ...typography.body,
 //   },
-//   listContainer: {
-//     paddingHorizontal: 20,
+//   searchLoader: {
+//     marginHorizontal: layout.spacing.sm,
 //   },
-//   titleCard: {
+//   clearButton: {
+//     padding: layout.spacing.xs,
+//   },
+//   filterContainer: {
+//     paddingHorizontal: layout.spacing.lg,
+//     marginBottom: layout.spacing.md,
+//   },
+//   filterRow: {
 //     flexDirection: 'row',
-//     backgroundColor: 'white',
-//     padding: 15,
-//     marginBottom: 15,
-//     borderRadius: 12,
+//     justifyContent: 'space-between',
 //     alignItems: 'center',
-//     elevation: 2,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 1 },
-//     shadowOpacity: 0.1,
-//     shadowRadius: 2,
 //   },
-//   coverImage: {
-//     width: 100,
-//     height: 150,
-//     borderRadius: 6,
-//     marginRight: 15,
+//   activeFilter: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     backgroundColor: colors.primary,
+//     paddingHorizontal: layout.spacing.md,
+//     paddingVertical: layout.spacing.sm,
+//     borderRadius: layout.borderRadius.full,
 //   },
-//   titleInfo: {
+//   activeFilterText: {
+//     ...typography.button,
+//     color: colors.card,
+//     marginLeft: layout.spacing.xs,
+//   },
+//   resultCount: {
+//     ...typography.bodySmall,
+//     fontWeight: '500',
+//   },
+//   booksContainer: {
 //     flex: 1,
 //   },
-//   titleName: {
-//     fontSize: 16,
-//     fontWeight: '600',
-//     color: '#333',
-//     marginBottom: 4,
+//   booksContent: {
+//     paddingHorizontal: layout.spacing.lg,
+//     paddingBottom: layout.spacing.lg,
 //   },
-//   titleAuthor: {
-//     fontSize: 14,
-//     color: '#666',
-//     marginBottom: 6,
+//   bookItem: {
+//     flexDirection: 'row',
+//     alignItems: 'center',
+//     backgroundColor: colors.card,
+//     padding: layout.spacing.md,
+//     borderRadius: layout.borderRadius.md,
+//     marginBottom: layout.spacing.md,
+//     shadowColor: colors.shadow,
+//     shadowOffset: {
+//       width: 0,
+//       height: 2,
+//     },
+//     shadowOpacity: 0.1,
+//     shadowRadius: 3.84,
+//     elevation: 5,
 //   },
-//   titleDescription: {
-//     fontSize: 13,
-//     color: '#888',
-//     lineHeight: 18,
+//   bookImageContainer: {
+//     marginRight: layout.spacing.md,
+//   },
+//   bookImage: {
+//     width: 60,
+//     height: 80,
+//     borderRadius: layout.borderRadius.sm,
+//   },
+//   placeholderImage: {
+//     width: 60,
+//     height: 80,
+//     borderRadius: layout.borderRadius.sm,
+//     backgroundColor: colors.background,
+//     justifyContent: 'center',
+//     alignItems: 'center',
+//   },
+//   bookInfo: {
+//     flex: 1,
+//   },
+//   bookTitle: {
+//     ...typography.h4,
+//     marginBottom: layout.spacing.xs,
+//   },
+//   bookType: {
+//     ...typography.bodySmall,
+//     marginBottom: 2,
+//   },
+//   bookDate: {
+//     ...typography.caption,
 //   },
 //   emptyContainer: {
-//     alignItems: 'center',
+//     flex: 1,
 //     justifyContent: 'center',
-//     paddingVertical: 60,
+//     alignItems: 'center',
+//     paddingTop: 100,
 //   },
-//   emptyText: {
-//     fontSize: 18,
-//     fontWeight: '600',
-//     color: '#666',
-//     marginTop: 15,
+//   emptyTitle: {
+//     ...typography.h3,
+//     color: colors.textSecondary,
+//     marginTop: layout.spacing.md,
+//     marginBottom: layout.spacing.sm,
 //   },
-//   emptySubtext: {
-//     fontSize: 14,
-//     color: '#999',
+//   emptySubtitle: {
+//     ...typography.body,
+//     color: colors.textSecondary,
 //     textAlign: 'center',
-//     marginTop: 5,
-//     paddingHorizontal: 40,
+//     marginBottom: layout.spacing.md,
+//   },
+//   clearSearchButton: {
+//     backgroundColor: colors.primary,
+//     paddingHorizontal: layout.spacing.lg,
+//     paddingVertical: layout.spacing.sm,
+//     borderRadius: layout.borderRadius.sm,
+//   },
+//   clearSearchText: {
+//     ...typography.button,
+//     color: colors.card,
 //   },
 // });

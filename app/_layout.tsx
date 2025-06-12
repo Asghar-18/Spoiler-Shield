@@ -1,77 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { authService } from '../services';
+import { useAuthStore } from '../store/auth-store';
 
 export default function RootLayout() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading, isInitialized, initialize } = useAuthStore();
   const segments = useSegments();
 
   useEffect(() => {
-    // Check initial authentication state
-    checkInitialAuth();
+    // Initialize auth store
+    initialize();
+  }, []);
 
-    // Listen for auth state changes
-    const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      setUser(session?.user ?? null);
-      
-      // Handle navigation based on auth state
-      if (session?.user) {
-        // User is signed in, redirect to home if they're on auth page
-        if (segments[0] === 'auth' as any) {
-          router.replace('/');
-        }
-      } else {
-        // User is signed out, redirect to auth if they're not already there
-        if (segments[0] !== 'auth' as any) {
-          router.replace('/auth' as any);
-        }
-      }
-    });
+  useEffect(() => {
+    // Only handle navigation after auth is initialized
+    if (!isInitialized) return;
 
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, [segments]);
+    const inAuthGroup = segments[0] === 'auth' as any;
 
-  const checkInitialAuth = async () => {
-    try {
-      const { user: currentUser, error } = await authService.getCurrentUser();
-      
-      if (error) {
-        console.error('Error checking auth:', error);
-        setUser(null);
-      } else {
-        setUser(currentUser);
-      }
-
-      // Navigate based on initial auth state
-      if (currentUser) {
-        // User is authenticated, ensure they're not on auth page
-        if (segments[0] === 'auth' as any) {
-          router.replace('/');
-        }
-      } else {
-        // User is not authenticated, redirect to auth
-        if (segments[0] !== 'auth' as any) {
-          router.replace('/auth' as any);
-        }
-      }
-    } catch (error) {
-      console.error('Error in checkInitialAuth:', error);
-      setUser(null);
+    if (user && inAuthGroup) {
+      // User is authenticated and on auth pages, redirect to home
+      router.replace('/');
+    } else if (!user && !inAuthGroup) {
+      // User is not authenticated and not on auth pages, redirect to auth
       router.replace('/auth' as any);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user, segments, isInitialized]);
 
-  // Show loading screen while checking authentication
-  if (loading) {
+  // Show loading screen while initializing authentication
+  if (!isInitialized || isLoading) {
     return (
       <SafeAreaProvider>
         <View style={styles.loadingContainer}>
@@ -91,7 +50,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="auth" />
         <Stack.Screen 
           name="book/[id]" 
           options={{

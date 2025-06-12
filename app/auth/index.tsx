@@ -11,16 +11,16 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { authService } from '../../services';
+import { useAuthStore } from '../../store/auth-store';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  const { signIn, signUp, resetPassword, isLoading } = useAuthStore();
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -46,11 +46,9 @@ export default function AuthScreen() {
       return;
     }
 
-    setLoading(true);
-    
     try {
       if (isSignUp) {
-        const { error } = await authService.signUp(email.trim(), password, fullName.trim());
+        const { error } = await signUp(email.trim(), password, fullName.trim());
         if (error) {
           Alert.alert('Sign Up Error', error.message);
         } else {
@@ -71,19 +69,15 @@ export default function AuthScreen() {
           );
         }
       } else {
-        const { error } = await authService.signIn(email.trim(), password);
+        const { error } = await signIn(email.trim(), password);
         if (error) {
           Alert.alert('Sign In Error', error.message);
-        } else {
-          // Navigation will be handled by the auth state change listener in _layout.tsx
-          // No need to manually navigate here
         }
+        // Navigation will be handled by the auth state change in RootLayout
       }
     } catch (error) {
       console.error('Auth error:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -101,7 +95,7 @@ export default function AuthScreen() {
     }
 
     try {
-      const { error } = await authService.resetPassword(email.trim());
+      const { error } = await resetPassword(email.trim());
       if (error) {
         Alert.alert('Error', error.message);
       } else {
@@ -130,11 +124,11 @@ export default function AuthScreen() {
           {/* Logo and Branding */}
           <View style={styles.logoContainer}>
             <View style={styles.logoCircle}>
-              <Ionicons name="book" size={32} color="#fff" />
+              <Ionicons name="shield" size={32} color="#fff" />
             </View>
             <Text style={styles.brandText}>
-              <Text style={styles.readText}>Book</Text>
-              <Text style={styles.shieldText}>Reader</Text>
+              <Text style={styles.readText}>Spoiler</Text>
+              <Text style={styles.shieldText}>Shield</Text>
             </Text>
           </View>
 
@@ -166,6 +160,7 @@ export default function AuthScreen() {
                     onChangeText={setFullName}
                     autoCapitalize="words"
                     returnKeyType="next"
+                    editable={!isLoading}
                   />
                 </View>
               </View>
@@ -185,6 +180,7 @@ export default function AuthScreen() {
                   autoCapitalize="none"
                   autoComplete="email"
                   returnKeyType="next"
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -203,6 +199,7 @@ export default function AuthScreen() {
                   autoComplete="password"
                   returnKeyType="done"
                   onSubmitEditing={handleAuth}
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -212,6 +209,7 @@ export default function AuthScreen() {
               <TouchableOpacity 
                 style={styles.forgotPasswordContainer}
                 onPress={handleForgotPassword}
+                disabled={isLoading}
               >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
@@ -220,12 +218,12 @@ export default function AuthScreen() {
 
           {/* Primary Button */}
           <TouchableOpacity 
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
+            style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
             onPress={handleAuth}
-            disabled={loading}
+            disabled={isLoading}
           >
             <Text style={styles.primaryButtonText}>
-              {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+              {isLoading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
             </Text>
           </TouchableOpacity>
 
@@ -236,7 +234,7 @@ export default function AuthScreen() {
           <TouchableOpacity 
             style={styles.secondaryButton}
             onPress={toggleMode}
-            disabled={loading}
+            disabled={isLoading}
           >
             <Text style={styles.secondaryButtonText}>
               {isSignUp ? 'Already have an account? Sign In' : 'New here? Create an Account'}
@@ -264,7 +262,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   logoCircle: {
     width: 80,
@@ -328,7 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -352,7 +350,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#6366F1',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     marginBottom: 24,
     shadowColor: '#6366F1',
@@ -382,7 +380,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#6366F1',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   secondaryButtonText: {
