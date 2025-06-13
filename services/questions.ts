@@ -122,4 +122,18 @@ export const questionsService = {
       .order('created_at', { ascending: false });
     return { data, error };
   },
+
+  // Get questions by title ID
+  getQuestionsByTitle: async (userId: string, titleId: string) => {
+    const { data, error } = await supabase
+      .from('questions')
+      .select(`
+        *,
+        titles(id, name, coverImage)
+      `)
+      .eq('user_id', userId)
+      .eq('title_id', titleId)
+      .order('created_at', { ascending: false });
+    return { data, error };
+  },
 };

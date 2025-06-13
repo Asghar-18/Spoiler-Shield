@@ -45,7 +45,7 @@ export default function AppHeader({
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: layout.spacing.lg,
-    paddingTop: layout.spacing.sm,
+    paddingTop: layout.spacing.md,
     paddingBottom: layout.spacing.lg,
     backgroundColor: colors.card,
   },
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     marginBottom: layout.spacing.lg,
   },
   headerTitle: {
-    ...typography.h4,
+    ...typography.h3,
   },
   logoutButton: {
     padding: layout.spacing.xs,

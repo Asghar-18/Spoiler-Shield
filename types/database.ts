@@ -108,21 +108,24 @@ export type Database = {
           id: string;
           user_id: string;
           title_id: string;
-          max_chapter: number | null;
+          current_chapter?: number;
+          total_chapters?: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
           title_id: string;
-          max_chapter?: number | null;
+          current_chapter?: number;
+          total_chapters?: number;
           created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
           title_id?: string;
-          max_chapter?: number | null;
+          current_chapter?: number;
+          total_chapters?: number;
           created_at?: string;
         };
       };
@@ -131,14 +134,28 @@ export type Database = {
 };
 
 // Helper types for easier usage
-export type User = Database['public']['Tables']['users']['Row'];
-export type Title = Database['public']['Tables']['titles']['Row'];
-export type Chapter = Database['public']['Tables']['chapters']['Row'];
-export type Question = Database['public']['Tables']['questions']['Row'];
-export type UserProgress = Database['public']['Tables']['user_progress']['Row'];
+export type User = Database["public"]["Tables"]["users"]["Row"];
+export type Title = Database["public"]["Tables"]["titles"]["Row"];
+export type Chapter = Database["public"]["Tables"]["chapters"]["Row"];
+export type Question = Database["public"]["Tables"]["questions"]["Row"];
+export type UserProgress = Database["public"]["Tables"]["user_progress"]["Row"];
 
-export type InsertUser = Database['public']['Tables']['users']['Insert'];
-export type InsertTitle = Database['public']['Tables']['titles']['Insert'];
-export type InsertChapter = Database['public']['Tables']['chapters']['Insert'];
-export type InsertQuestion = Database['public']['Tables']['questions']['Insert'];
-export type InsertUserProgress = Database['public']['Tables']['user_progress']['Insert'];
+export type InsertUser = Database["public"]["Tables"]["users"]["Insert"];
+export type InsertTitle = Database["public"]["Tables"]["titles"]["Insert"];
+export type InsertChapter = Database["public"]["Tables"]["chapters"]["Insert"];
+export type InsertQuestion =
+  Database["public"]["Tables"]["questions"]["Insert"];
+export type InsertUserProgress =
+  Database["public"]["Tables"]["user_progress"]["Insert"];
+
+// export interface UserProgress {
+//   id: string;
+//   user_id: string;
+//   title_id: string;
+//   current_chapter: number;
+//   total_chapters: number;
+//   progress_percentage: number;
+//   created_at: string;
+//   updated_at: string;
+//   titles?: Title;
+// }

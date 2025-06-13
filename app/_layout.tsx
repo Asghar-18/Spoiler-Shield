@@ -56,6 +56,22 @@ export default function RootLayout() {
           options={{
             headerShown: true,
             headerTitle: 'Book Details',
+            headerBackTitle: 'Back',            
+          }}
+        />
+        <Stack.Screen 
+          name="book/[id]/ask-question" 
+          options={{
+            headerShown: true,
+            headerTitle: 'Ask a Question',
+            headerBackTitle: 'Back',
+          }}
+        />
+        <Stack.Screen 
+          name="book/[id]/set-progress" 
+          options={{
+            headerShown: true,
+            headerTitle: 'Set Progress',
             headerBackTitle: 'Back',
           }}
         />

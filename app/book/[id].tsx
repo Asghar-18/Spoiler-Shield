@@ -1,35 +1,54 @@
 import colors from "@/constants/colors";
 import layout from "@/constants/layout";
-import { titlesService } from "@/services";
+import typography from "@/constants/typography";
+import { titlesService, progressService } from "@/services";
+import { useAuthStore } from "@/store/auth-store";
 import type { Title } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams, Stack } from "expo-router";
-import React, { useEffect, useState } from "react";
+import {
+  router,
+  Stack,
+  useLocalSearchParams,
+  useFocusEffect,
+} from "expo-router";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  StatusBar,
 } from "react-native";
 
 export default function BookDetailsScreen() {
   const params = useLocalSearchParams();
+  const { user } = useAuthStore();
   const bookId = params.id as string;
 
   const [book, setBook] = useState<Title | null>(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [currentChapter, setCurrentChapter] = useState(0);
+  const [totalChapters, setTotalChapters] = useState(0);
 
   useEffect(() => {
     if (bookId) {
       loadBookDetails();
     }
   }, [bookId]);
+
+  // Reload progress when screen comes into focus (e.g., after returning from set progress screen)
+  useFocusEffect(
+    useCallback(() => {
+      if (user && bookId) {
+        loadUserProgress();
+      }
+    }, [user, bookId])
+  );
 
   const loadBookDetails = async () => {
     try {
@@ -43,6 +62,11 @@ export default function BookDetailsScreen() {
       }
 
       setBook(data);
+
+      // Load user progress after book details are loaded
+      if (user) {
+        await loadUserProgress();
+      }
     } catch (error) {
       console.error("Error in loadBookDetails:", error);
       Alert.alert("Error", "Something went wrong");
@@ -51,19 +75,69 @@ export default function BookDetailsScreen() {
     }
   };
 
+  const loadUserProgress = async () => {
+    if (!user || !bookId) return;
+
+    try {
+      const { data, error } = await progressService.getProgressByTitle(
+        user.id,
+        bookId
+      );
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 is "not found" error
+        console.error("Error loading progress:", error);
+        return;
+      }
+
+      if (data) {
+        setProgress(Math.round(data.progress_percentage || 0));
+        setCurrentChapter(data.current_chapter || 0);
+        setTotalChapters(data.total_chapters || 0);
+        console.log("Loaded user progress:", data);
+      } else {
+        // No progress found, reset to defaults
+        setProgress(0);
+        setCurrentChapter(0);
+        setTotalChapters(0);
+      }
+    } catch (error) {
+      console.error("Error loading user progress:", error);
+    }
+  };
+
   const handleAskQuestion = () => {
-    // Navigate to question screen or show question modal
-    Alert.alert("Ask a Question", "Question feature coming soon!");
+    router.push({
+      pathname: "/book/[id]/ask-question" as any,
+      params: {
+        id: bookId,
+        bookName: book?.name || "Untitled Book",
+      },
+    });
   };
 
   const handleSetProgress = () => {
-    // Show progress update modal
-    Alert.alert("Set Progress", "Progress tracking coming soon!");
+    router.push({
+      pathname: "/book/[id]/set-progress" as any,
+      params: {
+        id: bookId,
+      },
+    });
   };
 
   const handleUpdateProgress = () => {
-    // Update progress
-    Alert.alert("Update Progress", "Progress update coming soon!");
+    // Navigate to set progress screen
+    handleSetProgress();
+  };
+
+  const getProgressText = () => {
+    if (progress === 0) {
+      return "Not started";
+    }
+    if (totalChapters > 0) {
+      return `Chapter ${currentChapter} of ${totalChapters} (${progress}% complete)`;
+    }
+    return `${progress}% complete`;
   };
 
   if (loading) {
@@ -79,13 +153,9 @@ export default function BookDetailsScreen() {
   if (!book) {
     return (
       <View style={styles.notFound}>
-        <Ionicons
-          name="book-outline"
-          size={64}
-          color={colors.textSecondary}
-        />
+        <Ionicons name="book-outline" size={64} color={colors.textSecondary} />
         <Text style={styles.notFoundText}>Book not found</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButtonError}
           onPress={() => router.back()}
         >
@@ -97,20 +167,24 @@ export default function BookDetailsScreen() {
 
   return (
     <>
-      <Stack.Screen 
+      <Stack.Screen
         options={{
-          title: '',
+          title: "",
           headerTransparent: true,
-          headerTintColor: 'white',
+          headerTintColor: "white",
+          headerTitleStyle: {
+            ...typography.h3,
+            color: "white",
+          },
           headerLeft: () => (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
             >
               <Ionicons name="chevron-back" size={24} color="white" />
             </TouchableOpacity>
           ),
-        }} 
+        }}
       />
       <StatusBar barStyle="light-content" />
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -128,7 +202,7 @@ export default function BookDetailsScreen() {
           )}
           <View style={styles.overlay} />
         </View>
-        
+
         <View style={styles.content}>
           <View style={styles.titleContainer}>
             <View style={styles.titleInfo}>
@@ -139,7 +213,7 @@ export default function BookDetailsScreen() {
               <Text style={styles.typeText}>Book</Text>
             </View>
           </View>
-          
+
           <View style={styles.genreContainer}>
             <View style={styles.genreTag}>
               <Text style={styles.genreText}>Fiction</Text>
@@ -151,7 +225,7 @@ export default function BookDetailsScreen() {
               <Text style={styles.genreText}>Contemporary</Text>
             </View>
           </View>
-          
+
           <View style={styles.progressCard}>
             <View style={styles.progressHeader}>
               <Text style={styles.progressTitle}>Your Progress</Text>
@@ -162,22 +236,24 @@ export default function BookDetailsScreen() {
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${progress}%` }]} />
             </View>
-            <Text style={styles.progressStatus}>
-              {progress === 0 ? "Not started" : `${progress}% complete`}
-            </Text>
+            <Text style={styles.progressStatus}>{getProgressText()}</Text>
           </View>
-          
+
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>
             {book.description || "No description available."}
           </Text>
-          
+
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, styles.askButton]}
               onPress={handleAskQuestion}
             >
-              <Ionicons name="chatbubble-outline" size={20} color={colors.card} />
+              <Ionicons
+                name="chatbubble-outline"
+                size={20}
+                color={colors.card}
+              />
               <Text style={styles.askButtonText}>Ask a Question</Text>
             </TouchableOpacity>
             <TouchableOpacity
