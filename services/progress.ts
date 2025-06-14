@@ -1,67 +1,66 @@
-import { supabase } from '../lib/supabase';
+// services/api/progress.ts
+import type { UserProgress } from '@/types/database';
+import type { ApiResponse } from '@/utils/api-types';
+import { api } from '../utils/api';
 
-export const progressService = {
-  // Update user progress for a title
-  updateProgress: async (
-    userId: string,
-    titleId: string,
-    currentChapter: number,
-    totalChapters: number
-  ) => {
-    const progressPercentage = totalChapters > 0 ? (currentChapter / totalChapters) * 100 : 0;
-    
-    const { data, error } = await supabase
-      .from('user_progress')
-      .upsert({
-        user_id: userId,
-        title_id: titleId,
-        current_chapter: currentChapter,
-        total_chapters: totalChapters,
-        progress_percentage: progressPercentage,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,title_id'
-      })
-      .select()
-      .single();
-      
-    return { data, error };
-  },
+// Extended types to match your service (includes fields not in original schema)
+export interface ExtendedUserProgress extends UserProgress {
+  progress_percentage?: number;
+  updated_at?: string;
+  titles?: {
+    id: string;
+    name: string | null;
+    coverImage: string | null;
+  };
+}
 
-  // Get user progress for a specific title
-  getProgressByTitle: async (userId: string, titleId: string) => {
-    const { data, error } = await supabase
-      .from('user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('title_id', titleId)
-      .single();
-      
-    return { data, error };
-  },
+// Request payload types
+export interface UpdateProgressRequest {
+  title_id: string;
+  current_chapter: number;
+  total_chapters: number;
+}
 
-  // Get all user progress
-  getUserProgress: async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_progress')
-      .select(`
-        *,
-        titles(id, name, coverImage)
-      `)
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
-      
-    return { data, error };
-  },
+export interface UpdateProgressByTitleRequest {
+  current_chapter: number;
+  total_chapters: number;
+}
+
+// Progress statistics type
+export interface ProgressStats {
+  total_titles: number;
+  completed_titles: number;
+  in_progress_titles: number;
+  average_progress: number;
+  total_chapters_read: number;
+}
+
+export const progressApiClient = {
+  // Get all user progress (authenticated user from token)
+  getUserProgress: () => 
+    api.authGet<ApiResponse<ExtendedUserProgress[]>>('/progress'),
+
+  // Get user progress statistics
+  getUserProgressStats: () => 
+    api.authGet<ApiResponse<ProgressStats>>('/progress/stats'),
+
+  // Get progress for a specific title
+  getProgressByTitle: (titleId: string) => 
+    api.authGet<ApiResponse<ExtendedUserProgress>>(`/progress/title/${titleId}`),
+
+  // Update user progress (POST method)
+  updateProgress: (data: UpdateProgressRequest) => 
+    api.authPost<ApiResponse<ExtendedUserProgress>>('/progress', data),
+
+  // Update progress for a specific title (PUT method - alternative endpoint)
+  updateProgressByTitle: (titleId: string, data: UpdateProgressByTitleRequest) => 
+    api.authPut<ApiResponse<ExtendedUserProgress>>(`/progress/title/${titleId}`, data),
+
+  // Reset progress for a title
+  resetProgress: (titleId: string) => 
+    api.authPost<ApiResponse<ExtendedUserProgress>>(`/progress/title/${titleId}/reset`, {}),
 
   // Delete progress for a title
-  deleteProgress: async (userId: string, titleId: string) => {
-    const { data, error } = await supabase
-      .from('user_progress')
-      .delete()
-      .eq('user_id', userId)
-      .eq('title_id', titleId);
-      
-    return { data, error };
-  },
+  deleteProgress: (titleId: string) => 
+    api.authDelete(`/progress/title/${titleId}`),
 };

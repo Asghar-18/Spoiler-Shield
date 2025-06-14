@@ -1,25 +1,20 @@
-import colors from '@/constants/colors';
-import layout from '@/constants/layout';
-import { titlesService } from '@/services';
-import { useAuthStore } from '@/store/auth-store';
-import type { Title } from '@/types/database';
-import { router } from 'expo-router';
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  Alert,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import colors from "@/constants/colors";
+import layout from "@/constants/layout";
+import { titlesApiClient } from "@/services/titles";
+import { useAuthStore } from "@/store/auth-store";
+import type { Title } from "@/types/database";
+import { router } from "expo-router";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Alert, RefreshControl, ScrollView, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // Import the separated components
-import AppHeader from '@/components/AppHeader';
-import BookCard from '@/components/BookCard';
-import EmptyState from '@/components/EmptyState';
-import FilterSection from '@/components/FilterSection';
-import LoadingScreen from '@/components/LoadingScreen';
-import SearchBar from '@/components/SearchBar';
+import AppHeader from "@/components/AppHeader";
+import BookCard from "@/components/BookCard";
+import EmptyState from "@/components/EmptyState";
+import FilterSection from "@/components/FilterSection";
+import LoadingScreen from "@/components/LoadingScreen";
+import SearchBar from "@/components/SearchBar";
 
 interface HomePageState {
   books: Title[];
@@ -35,7 +30,7 @@ export default function HomePage() {
   const [state, setState] = useState<HomePageState>({
     books: [],
     filteredBooks: [],
-    searchQuery: '',
+    searchQuery: "",
     loading: true,
     searchLoading: false,
     refreshing: false,
@@ -58,7 +53,7 @@ export default function HomePage() {
   // Check authentication - redirect if not authenticated
   useEffect(() => {
     if (!user) {
-      router.replace('/auth' as any);
+      router.replace("/auth" as any);
       return;
     }
   }, [user]);
@@ -78,7 +73,10 @@ export default function HomePage() {
 
     debounceTimerRef.current = setTimeout(() => {
       if (isMountedRef.current) {
-        handleSearch();
+        // Only search if we have books loaded
+        if (state.books.length > 0) {
+          handleSearch();
+        }
       }
     }, 300);
 
@@ -87,149 +85,168 @@ export default function HomePage() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [state.searchQuery]);
+  }, [state.searchQuery, state.books.length]);
 
   const updateState = useCallback((updates: Partial<HomePageState>) => {
     if (isMountedRef.current) {
-      setState(prev => ({ ...prev, ...updates }));
+      setState((prev) => ({ ...prev, ...updates }));
     }
   }, []);
 
-  const loadBooks = useCallback(async (isRefreshing: boolean = false) => {
-    try {
-      updateState({ 
-        loading: !isRefreshing, 
-        refreshing: isRefreshing 
-      });
+  const loadBooks = useCallback(
+    async (isRefreshing: boolean = false) => {
+      try {
+        updateState({
+          loading: !isRefreshing,
+          refreshing: isRefreshing,
+        });
 
-      const { data, error } = await titlesService.getTitles();
-      
-      if (!isMountedRef.current) return;
+        console.log("Loading books..."); // DEBUG
+        const response = await titlesApiClient.getTitles();
+        console.log("API Response:", response); // DEBUG
 
-      if (error) {
-        console.error('Error loading books:', error);
-        Alert.alert('Error', 'Failed to load books. Please try again.');
-        return;
+        if (!isMountedRef.current) return;
+
+        // Check if response was successful before accessing data
+        if (response.success) {
+          const books = response.data || [];
+          console.log("Processed books:", books.length); // DEBUG
+          
+          updateState({
+            books,
+            filteredBooks: books,
+            loading: false,
+            refreshing: false,
+          });
+
+          console.log("State updated with books:", books.length); // DEBUG
+        } else {
+          // Handle API error
+          console.error("API Error:", response.error);
+          Alert.alert("Error", response.error || "Failed to load books");
+          updateState({
+            loading: false,
+            refreshing: false,
+          });
+        }
+      } catch (error) {
+        if (!isMountedRef.current) return;
+
+        console.error("Error in loadBooks:", error);
+        Alert.alert("Error", "Something went wrong while loading books");
+        updateState({
+          loading: false,
+          refreshing: false,
+        });
       }
-
-      const books = data || [];
-      updateState({
-        books,
-        filteredBooks: state.searchQuery.trim() ? state.filteredBooks : books,
-        loading: false,
-        refreshing: false,
-      });
-
-      // If we have a search query, re-run search with new data
-      if (state.searchQuery.trim()) {
-        handleSearch();
-      }
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      
-      console.error('Error in loadBooks:', error);
-      Alert.alert('Error', 'Something went wrong while loading books');
-      updateState({ 
-        loading: false, 
-        refreshing: false 
-      });
-    }
-  }, [state.searchQuery, updateState]);
+    },
+    [updateState]
+  );
 
   const handleSearch = useCallback(async () => {
     const query = state.searchQuery.trim();
-    
-    if (query === '') {
+    console.log("Searching for:", query); // DEBUG
+
+    if (query === "") {
+      console.log("Empty query, setting filteredBooks to all books:", state.books.length); // DEBUG
       updateState({ filteredBooks: state.books });
       return;
     }
 
     try {
       updateState({ searchLoading: true });
-      
-      const { data, error } = await titlesService.searchTitles(query);
-      
+
+      console.log("Making search API call..."); // DEBUG
+      const response = await titlesApiClient.searchTitles(query);
+      console.log("Search API response:", response); // DEBUG
+
       if (!isMountedRef.current) return;
 
-      if (error) {
-        console.error('Search error:', error);
-        // Fallback to local filtering if search fails
-        const localFiltered = state.books.filter(book =>
-          book.name?.toLowerCase().includes(query.toLowerCase()) ||
-          book.author?.toLowerCase().includes(query.toLowerCase())
-        );
-        updateState({ 
-          filteredBooks: localFiltered,
-          searchLoading: false 
-        });
-        return;
-      }
+      // Check if response was successful before accessing data
+      if (response.success) {
+        const searchResults = response.data || [];
+        console.log("Processed search results:", searchResults.length); // DEBUG
 
-      updateState({ 
-        filteredBooks: data || [],
-        searchLoading: false 
-      });
+        updateState({
+          filteredBooks: searchResults,
+          searchLoading: false,
+        });
+      } else {
+        // Handle API error - fallback to local filtering
+        console.warn("Search API error:", response.error);
+        const localFiltered = state.books.filter(
+          (book) =>
+            book.name?.toLowerCase().includes(query.toLowerCase()) ||
+            book.author?.toLowerCase().includes(query.toLowerCase())
+        );
+        console.log("Local filtered results:", localFiltered.length); // DEBUG
+        updateState({
+          filteredBooks: localFiltered,
+          searchLoading: false,
+        });
+      }
     } catch (error) {
       if (!isMountedRef.current) return;
-      
-      console.error('Error in handleSearch:', error);
+
+      console.error("Error in handleSearch:", error);
       // Fallback to local filtering
-      const localFiltered = state.books.filter(book =>
-        book.name?.toLowerCase().includes(query.toLowerCase()) ||
-        book.author?.toLowerCase().includes(query.toLowerCase())
+      const localFiltered = state.books.filter(
+        (book) =>
+          book.name?.toLowerCase().includes(query.toLowerCase()) ||
+          book.author?.toLowerCase().includes(query.toLowerCase())
       );
-      updateState({ 
+      console.log("Local filtered results:", localFiltered.length); // DEBUG
+      updateState({
         filteredBooks: localFiltered,
-        searchLoading: false 
+        searchLoading: false,
       });
     }
   }, [state.searchQuery, state.books, updateState]);
 
   const handleBookPress = useCallback((book: Title) => {
     router.push({
-      pathname: '/book/[id]' as any,
-      params: { 
+      pathname: "/book/[id]" as any,
+      params: {
         id: book.id,
-        bookName: book.name || 'Untitled Book',
-        coverImage: book.coverImage || ''
-      }
+        bookName: book.name || "Untitled Book",
+        coverImage: book.coverImage || "",
+      },
     });
   }, []);
 
   const handleLogout = useCallback(async () => {
     try {
-      Alert.alert(
-        'Sign Out',
-        'Are you sure you want to sign out?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
+      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            await signOut();
+            // Navigation will be handled by auth state change in RootLayout
           },
-          {
-            text: 'Sign Out',
-            style: 'destructive',
-            onPress: async () => {
-              await signOut();
-              // Navigation will be handled by auth state change in RootLayout
-            },
-          },
-        ]
-      );
+        },
+      ]);
     } catch (error) {
-      console.error('Logout error:', error);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      console.error("Logout error:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
     }
   }, [signOut]);
 
-  const handleSearchChange = useCallback((query: string) => {
-    updateState({ searchQuery: query });
-  }, [updateState]);
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      updateState({ searchQuery: query });
+    },
+    [updateState]
+  );
 
   const clearSearch = useCallback(() => {
-    updateState({ 
-      searchQuery: '',
-      filteredBooks: state.books 
+    updateState({
+      searchQuery: "",
+      filteredBooks: state.books,
     });
   }, [state.books, updateState]);
 
@@ -246,6 +263,13 @@ export default function HomePage() {
   if (!user) {
     return null;
   }
+
+  // Add extra safety check before rendering
+  const booksToRender = Array.isArray(state.filteredBooks) ? state.filteredBooks : [];
+  
+  console.log("Render - booksToRender length:", booksToRender.length); // DEBUG
+  console.log("Render - state.books length:", state.books.length); // DEBUG
+  console.log("Render - state.filteredBooks length:", state.filteredBooks.length); // DEBUG
 
   return (
     <SafeAreaView style={styles.container}>
@@ -268,14 +292,14 @@ export default function HomePage() {
 
       {/* Filter Section */}
       <FilterSection
-        resultCount={state.filteredBooks.length}
+        resultCount={booksToRender.length}
         showResultCount={!!state.searchQuery.trim()}
         filterText="Books"
         filterIcon="book"
       />
 
       {/* Books List */}
-      <ScrollView 
+      <ScrollView
         style={styles.booksContainer}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.booksContent}
@@ -288,13 +312,13 @@ export default function HomePage() {
           />
         }
       >
-        {state.filteredBooks.length === 0 ? (
+        {booksToRender.length === 0 ? (
           <EmptyState
-            title={state.searchQuery ? 'No books found' : 'No books available'}
+            title={state.searchQuery ? "No books found" : "No books available"}
             subtitle={
-              state.searchQuery 
-                ? 'Try adjusting your search terms or browse all books' 
-                : 'Books will appear here once they are added to your library'
+              state.searchQuery
+                ? "Try adjusting your search terms or browse all books"
+                : "Books will appear here once they are added to your library"
             }
             icon="book-outline"
             showClearButton={!!state.searchQuery}
@@ -302,12 +326,8 @@ export default function HomePage() {
             clearButtonText="Clear search"
           />
         ) : (
-          state.filteredBooks.map((book) => (
-            <BookCard
-              key={book.id}
-              book={book}
-              onPress={handleBookPress}
-            />
+          booksToRender.map((book) => (
+            <BookCard key={book.id} book={book} onPress={handleBookPress} />
           ))
         )}
       </ScrollView>

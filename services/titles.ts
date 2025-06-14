@@ -1,63 +1,16 @@
-import { supabase } from '../lib/supabase';
-import type { Title, InsertTitle } from '../types/database';
+// services/api/titles.ts
+import type { InsertTitle, Title } from '@/types/database';
+import type { ApiResponse } from '@/utils/api-types';
+import { api } from '../utils/api';
 
-export const titlesService = {
-  // Get all titles (books)
-  getTitles: async () => {
-    const { data, error } = await supabase
-      .from('titles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    return { data, error };
-  },
+// Define the API response wrapper type
 
-  // Get a single title by ID
-  getTitleById: async (titleId: string) => {
-    const { data, error } = await supabase
-      .from('titles')
-      .select('*')
-      .eq('id', titleId)
-      .single();
-    return { data, error };
-  },
 
-  // Create a new title (admin function)
-  createTitle: async (title: InsertTitle) => {
-    const { data, error } = await supabase
-      .from('titles')
-      .insert(title)
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  // Update a title (admin function)
-  updateTitle: async (titleId: string, updates: Partial<Title>) => {
-    const { data, error } = await supabase
-      .from('titles')
-      .update(updates)
-      .eq('id', titleId)
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  // Delete a title (admin function)
-  deleteTitle: async (titleId: string) => {
-    const { data, error } = await supabase
-      .from('titles')
-      .delete()
-      .eq('id', titleId);
-    return { data, error };
-  },
-
-  // Search titles by name
-  searchTitles: async (searchTerm: string) => {
-    const { data, error } = await supabase
-      .from('titles')
-      .select('*')
-      .ilike('name', `%${searchTerm}%`)
-      .order('created_at', { ascending: false });
-    return { data, error };
-  },
+export const titlesApiClient = {
+  getTitles: () => api.get<ApiResponse<Title[]>>('/titles'),
+  getTitleById: (id: string) => api.get<ApiResponse<Title>>(`/titles/${id}`),
+  createTitle: (title: InsertTitle) => api.post<ApiResponse<Title>>('/titles', title),
+  updateTitle: (id: string, updates: Partial<Title>) => api.put<ApiResponse<Title>>(`/titles/${id}`, updates),
+  deleteTitle: (id: string) => api.delete(`/titles/${id}`), // Note: removed duplicate /api
+  searchTitles: (query: string) => api.get<ApiResponse<Title[]>>(`/titles/search?query=${encodeURIComponent(query)}`), // Note: removed duplicate /api
 };

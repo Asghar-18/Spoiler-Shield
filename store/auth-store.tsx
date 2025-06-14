@@ -1,17 +1,9 @@
+// stores/auth-store.tsx
 import { create } from "zustand";
-import { authService } from "../services/auth";
-
-interface User {
-  id: string;
-  email?: string;
-  name?: string;
-  email_confirmed_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+import { authApiClientMethods, type AuthUser } from "../services/auth";
 
 interface AuthState {
-  user: User | null;
+  user: AuthUser | null;
   isLoading: boolean;
   isInitialized: boolean;
 
@@ -29,9 +21,10 @@ interface AuthState {
     name?: string;
     email?: string;
   }) => Promise<{ error: any }>;
+  refreshSession: () => Promise<{ error: any }>;
 
   // Internal actions
-  setUser: (user: User | null) => void;
+  setUser: (user: AuthUser | null) => void;
   setLoading: (loading: boolean) => void;
   setInitialized: (initialized: boolean) => void;
 }
@@ -45,25 +38,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      // Wait for session to load
-      const {
-        session,
-        error,
-      } = await authService.getCurrentSession();
-
-      if (error) {
-        console.error("Error getting session:", error);
-        set({ user: null, isLoading: false, isInitialized: true });
-        return;
+      // Try to initialize with stored tokens
+      const tokenValid = await authApiClientMethods.initializeAuth();
+      
+      if (tokenValid) {
+        // Get current user info
+        const response = await authApiClientMethods.getCurrentUser();
+        if (response.success) {
+          set({ user: response.data.user });
+        }
       }
-
-      set({ user: session?.user ?? null });
-
-      // Set up listener after initial load
-      authService.onAuthStateChange((event, session) => {
-        console.log("Auth state changed:", event, session?.user?.email);
-        set({ user: session?.user ?? null });
-      });
 
       set({ isLoading: false, isInitialized: true });
     } catch (error) {
@@ -76,15 +60,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      const { error } = await authService.signIn(email, password);
+      const response = await authApiClientMethods.signIn({ email, password });
 
-      if (error) {
+      if (!response.success) {
         set({ isLoading: false });
-        return { error };
+        return { error: response.error || 'Sign in failed' };
       }
 
-      // User will be set via onAuthStateChange listener
-      set({ isLoading: false });
+      // Store tokens and user
+      const { session, user } = response.data;
+      authApiClientMethods.storeTokens(session.access_token, session.refresh_token);
+      authApiClientMethods.setTokens(session.access_token, session.refresh_token);
+      
+      set({ user, isLoading: false });
       return { error: null };
     } catch (error) {
       console.error("Sign in error:", error);
@@ -97,10 +85,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      const { error } = await authService.signUp(email, password, name);
+      const response = await authApiClientMethods.signUp({ email, password, name });
+
+      if (!response.success) {
+        set({ isLoading: false });
+        return { error: response.error || 'Sign up failed' };
+      }
+
+      // Note: With email confirmation, user might not be immediately signed in
+      // Check if we got session data
+      if (response.data?.session) {
+        const { session, user } = response.data;
+        authApiClientMethods.storeTokens(session.access_token, session.refresh_token);
+        authApiClientMethods.setTokens(session.access_token, session.refresh_token);
+        
+        set({ user });
+      }
 
       set({ isLoading: false });
-      return { error };
+      return { error: null };
     } catch (error) {
       console.error("Sign up error:", error);
       set({ isLoading: false });
@@ -112,24 +115,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ isLoading: true });
 
-      const { error } = await authService.signOut();
+      // Call API to invalidate session
+      await authApiClientMethods.signOut();
 
-      if (error) {
-        console.error("Sign out error:", error);
-      }
-
-      // User will be set to null via onAuthStateChange listener
-      set({ isLoading: false });
+      // Clear tokens and user state
+      authApiClientMethods.removeTokens();
+      set({ user: null, isLoading: false });
     } catch (error) {
       console.error("Sign out error:", error);
-      set({ isLoading: false });
+      // Even if API call fails, clear local state
+      authApiClientMethods.removeTokens();
+      set({ user: null, isLoading: false });
     }
   },
 
   resetPassword: async (email: string) => {
     try {
-      const { error } = await authService.resetPassword(email);
-      return { error };
+      const response = await authApiClientMethods.resetPassword({ email });
+      
+      if (!response.success) {
+        return { error: response.error || 'Password reset failed' };
+      }
+
+      return { error: null };
     } catch (error) {
       console.error("Reset password error:", error);
       return { error };
@@ -138,21 +146,89 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateProfile: async (updates: { name?: string; email?: string }) => {
     try {
-      const { data, error } = await authService.updateProfile(updates);
+      set({ isLoading: true });
 
-      if (!error && data?.user) {
-        set({ user: data.user });
+      const response = await authApiClientMethods.updateProfile(updates);
+
+      if (!response.success) {
+        set({ isLoading: false });
+        return { error: response.error || 'Profile update failed' };
       }
 
-      return { error };
+      // Update user in state
+      set({ user: response.data.user, isLoading: false });
+      return { error: null };
     } catch (error) {
       console.error("Update profile error:", error);
+      set({ isLoading: false });
+      return { error };
+    }
+  },
+
+  refreshSession: async () => {
+    try {
+      const { refreshToken } = authApiClientMethods.getStoredTokens();
+      
+      if (!refreshToken) {
+        return { error: 'No refresh token available' };
+      }
+
+      const response = await authApiClientMethods.refreshToken({ 
+        refresh_token: refreshToken 
+      });
+
+      if (!response.success) {
+        // Refresh failed, clear everything
+        authApiClientMethods.removeTokens();
+        set({ user: null });
+        return { error: response.error || 'Session refresh failed' };
+      }
+
+      // Store new tokens
+      authApiClientMethods.storeTokens(
+        response.data.access_token, 
+        response.data.refresh_token
+      );
+
+      // Get updated user info
+      const userResponse = await authApiClientMethods.getCurrentUser();
+      if (userResponse.success) {
+        set({ user: userResponse.data.user });
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error("Session refresh error:", error);
+      authApiClientMethods.removeTokens();
+      set({ user: null });
       return { error };
     }
   },
 
   // Internal actions
-  setUser: (user: User | null) => set({ user }),
+  setUser: (user: AuthUser | null) => set({ user }),
   setLoading: (isLoading: boolean) => set({ isLoading }),
   setInitialized: (isInitialized: boolean) => set({ isInitialized }),
 }));
+
+// Helper hook for auth status
+export const useAuth = () => {
+  const { user, isLoading, isInitialized } = useAuthStore();
+  
+  return {
+    user,
+    isLoading,
+    isInitialized,
+    isAuthenticated: !!user,
+    isEmailVerified: !!user?.email_confirmed_at,
+  };
+};
+
+// Type definitions
+export type ApiResponse<T> = {
+  success: true;
+  data: T;
+} | {
+  success: false;
+  error: string;
+}

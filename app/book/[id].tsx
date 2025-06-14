@@ -1,27 +1,27 @@
 import colors from "@/constants/colors";
 import layout from "@/constants/layout";
 import typography from "@/constants/typography";
-import { titlesService, progressService } from "@/services";
+import { progressApiClient, titlesApiClient } from "@/services";
 import { useAuthStore } from "@/store/auth-store";
 import type { Title } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  router,
-  Stack,
-  useLocalSearchParams,
-  useFocusEffect,
+    router,
+    Stack,
+    useFocusEffect,
+    useLocalSearchParams,
 } from "expo-router";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 export default function BookDetailsScreen() {
@@ -53,19 +53,18 @@ export default function BookDetailsScreen() {
   const loadBookDetails = async () => {
     try {
       setLoading(true);
-      const { data, error } = await titlesService.getTitleById(bookId);
+      const response = await titlesApiClient.getTitleById(bookId);
 
-      if (error) {
-        Alert.alert("Error", "Failed to load book details");
-        console.error("Error loading book:", error);
-        return;
-      }
+      if (response.success) {
+        setBook(response.data);
 
-      setBook(data);
-
-      // Load user progress after book details are loaded
-      if (user) {
-        await loadUserProgress();
+        // Load user progress after book details are loaded
+        if (user) {
+          await loadUserProgress();
+        }
+      } else {
+        console.error("Error loading book details:", response.error);
+        Alert.alert("Error", "Book not found");
       }
     } catch (error) {
       console.error("Error in loadBookDetails:", error);
@@ -75,22 +74,15 @@ export default function BookDetailsScreen() {
     }
   };
 
-  const loadUserProgress = async () => {
+const loadUserProgress = async () => {
     if (!user || !bookId) return;
 
     try {
-      const { data, error } = await progressService.getProgressByTitle(
-        user.id,
-        bookId
-      );
+      const response = await progressApiClient.getProgressByTitle(bookId);
+      console.log("Fetched user progress:", response);
 
-      if (error && error.code !== "PGRST116") {
-        // PGRST116 is "not found" error
-        console.error("Error loading progress:", error);
-        return;
-      }
-
-      if (data) {
+      if (response.success && response.data) {
+        const data = response.data;
         setProgress(Math.round(data.progress_percentage || 0));
         setCurrentChapter(data.current_chapter || 0);
         setTotalChapters(data.total_chapters || 0);
@@ -103,9 +95,12 @@ export default function BookDetailsScreen() {
       }
     } catch (error) {
       console.error("Error loading user progress:", error);
+      // Reset to defaults on error
+      setProgress(0);
+      setCurrentChapter(0);
+      setTotalChapters(0);
     }
   };
-
   const handleAskQuestion = () => {
     router.push({
       pathname: "/book/[id]/ask-question" as any,

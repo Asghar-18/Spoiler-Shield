@@ -1,144 +1,160 @@
-import { supabase } from '../lib/supabase';
+// services/api/auth.ts
+import { api } from '../utils/api';
+import type { ApiResponse } from '@/utils/api-types';
+import type { User } from '@/types/database';
 
-export const authService = {
-  // Sign up new user
-  signUp: async (email: string, password: string, name?: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: name,
-            full_name: name, // Some systems use full_name
-          },
-        },
-      });
-      return { data, error };
-    } catch (error) {
-      console.error('SignUp service error:', error);
-      return { data: null, error };
-    }
+// Extended auth user type (combines database User with Supabase auth fields)
+export interface AuthUser extends User {
+  email_confirmed_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  user_metadata?: {
+    name?: string;
+    full_name?: string;
+    avatar_url?: string;
+    [key: string]: any;
+  };
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+}
+
+export interface AuthResponse {
+  user: AuthUser;
+  session: {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    token_type: string;
+    user: AuthUser;
+  };
+}
+
+// Request payload types
+export interface SignUpRequest {
+  email: string;
+  password: string;
+  name?: string;
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+}
+
+export interface UpdateProfileRequest {
+  name?: string;
+  email?: string;
+}
+
+export interface RefreshTokenRequest {
+  refresh_token: string;
+}
+
+export const authApiClientMethods = {
+  // Set authentication tokens
+  setTokens: (accessToken: string, refreshToken?: string) => {
+    api.setToken(accessToken);
+    // Store refresh token separately if needed
   },
 
-  // Sign in user
-  signIn: async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      return { data, error };
-    } catch (error) {
-      console.error('SignIn service error:', error);
-      return { data: null, error };
-    }
+  // Clear authentication tokens
+  clearTokens: () => {
+    api.clearToken();
   },
 
-  // Sign out user
-  signOut: async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      return { error };
-    } catch (error) {
-      console.error('SignOut service error:', error);
-      return { error };
-    }
-  },
+  // POST /api/auth/signup - Register new user
+  signUp: (data: SignUpRequest) => 
+    api.post<ApiResponse<AuthResponse>>('/auth/signup', data),
 
-  // Get current user
-  getCurrentUser: async () => {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      return { user, error };
-    } catch (error) {
-      console.error('GetCurrentUser service error:', error);
-      return { user: null, error };
-    }
-  },
+  // POST /api/auth/signin - Sign in user
+  signIn: (data: SignInRequest) => 
+    api.post<ApiResponse<AuthResponse>>('/auth/signin', data),
 
-  // Get current session
-  getCurrentSession: async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      return { session, error };
-    } catch (error) {
-      console.error('GetCurrentSession service error:', error);
-      return { session: null, error };
-    }
-  },
+  // POST /api/auth/signout - Sign out user (requires auth)
+  signOut: () => 
+    api.authPost<ApiResponse<{ message: string }>>('/auth/signout', {}),
 
-  // Listen to auth state changes
-  onAuthStateChange: (callback: (event: string, session: any) => void) => {
-    try {
-      return supabase.auth.onAuthStateChange(callback);
-    } catch (error) {
-      console.error('OnAuthStateChange service error:', error);
-      // Return a mock subscription object to prevent crashes
-      return {
-        data: {
-          subscription: {
-            unsubscribe: () => {},
-          },
-        },
-      };
-    }
-  },
+  // GET /api/auth/me - Get current user (requires auth)
+  getCurrentUser: () => 
+    api.authGet<ApiResponse<{ user: AuthUser }>>('/auth/me'),
 
-  // Reset password
-  resetPassword: async (email: string) => {
-    try {
-      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'your-app://reset-password', // Update this to your app's deep link
-      });
-      return { data, error };
-    } catch (error) {
-      console.error('ResetPassword service error:', error);
-      return { data: null, error };
-    }
-  },
+  // POST /api/auth/reset-password - Reset password
+  resetPassword: (data: ResetPasswordRequest) => 
+    api.post<ApiResponse<{ message: string }>>('/auth/reset-password', data),
 
-  // Update user profile
-  updateProfile: async (updates: { name?: string; email?: string }) => {
-    try {
-      const { data, error } = await supabase.auth.updateUser({
-        email: updates.email,
-        data: {
-          name: updates.name,
-          full_name: updates.name,
-        },
-      });
-      return { data, error };
-    } catch (error) {
-      console.error('UpdateProfile service error:', error);
-      return { data: null, error };
-    }
-  },
+  // PUT /api/auth/profile - Update user profile (requires auth)
+  updateProfile: (data: UpdateProfileRequest) => 
+    api.authPut<ApiResponse<{ user: AuthUser }>>('/auth/profile', data),
 
-  // Additional utility methods
-  
-  // Check if user email is verified
-  isEmailVerified: (user: any) => {
-    return user?.email_confirmed_at != null;
-  },
+  // POST /api/auth/refresh - Refresh session
+  refreshToken: (data: RefreshTokenRequest) => 
+    api.post<ApiResponse<AuthTokens>>('/auth/refresh', data),
 
-  // Get user metadata
-  getUserMetadata: (user: any) => {
+  // Utility methods for token management
+  getStoredTokens: () => {
+    // Note: In Claude.ai artifacts, localStorage is not available
+    // In a real app, you would use AsyncStorage (React Native) or localStorage (web)
+    // For now, returning null - implement based on your platform
     return {
-      name: user?.user_metadata?.name || user?.user_metadata?.full_name,
-      avatar_url: user?.user_metadata?.avatar_url,
-      ...user?.user_metadata,
+      accessToken: api.getToken(),
+      refreshToken: null as string | null, // You'll need to store this separately
     };
   },
 
-  // Refresh session
-  refreshSession: async () => {
-    try {
-      const { data, error } = await supabase.auth.refreshSession();
-      return { data, error };
-    } catch (error) {
-      console.error('RefreshSession service error:', error);
-      return { data: null, error };
+  storeTokens: (accessToken: string, refreshToken: string) => {
+    // Note: In Claude.ai artifacts, localStorage is not available
+    // In a real app, you would store in AsyncStorage (React Native) or localStorage (web)
+    api.setToken(accessToken);
+    console.log('Tokens stored (implement persistent storage based on your platform)');
+  },
+
+  removeTokens: () => {
+    // Note: In Claude.ai artifacts, localStorage is not available
+    // In a real app, you would remove from AsyncStorage (React Native) or localStorage (web)
+    api.clearToken();
+    console.log('Tokens removed (implement persistent storage based on your platform)');
+  },
+
+  // Initialize auth client with stored tokens
+  initializeAuth: async () => {
+    const { accessToken, refreshToken } = authApiClientMethods.getStoredTokens();
+    
+    if (accessToken) {
+      api.setToken(accessToken);
+      
+      try {
+        // Verify token is still valid
+        await authApiClientMethods.getCurrentUser();
+        return true;
+      } catch (error) {
+        // Token invalid, try to refresh if we have refresh token
+        if (refreshToken) {
+          try {
+            const response = await authApiClientMethods.refreshToken({ refresh_token: refreshToken });
+            if (response.success && response.data) {
+              authApiClientMethods.storeTokens(response.data.access_token, response.data.refresh_token);
+              return true;
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+          }
+        }
+        
+        // Clear invalid tokens
+        authApiClientMethods.removeTokens();
+        return false;
+      }
     }
+    
+    return false;
   },
 };

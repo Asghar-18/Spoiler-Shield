@@ -1,9 +1,9 @@
 // Export all API services for easy importing
-export { authService } from './auth';
+export { authApiClientMethods } from './auth';
 export { chaptersService } from './chapters';
-export { progressService } from './progress';
+export { progressApiClient } from './progress';
 export { questionsService } from './questions';
-export { titlesService } from './titles';
+export { titlesApiClient } from './titles';
 
 // Re-export supabase client for direct access when needed
 export { supabase } from '../lib/supabase';

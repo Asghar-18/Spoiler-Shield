@@ -147,15 +147,3 @@ export type InsertQuestion =
   Database["public"]["Tables"]["questions"]["Insert"];
 export type InsertUserProgress =
   Database["public"]["Tables"]["user_progress"]["Insert"];
-
-// export interface UserProgress {
-//   id: string;
-//   user_id: string;
-//   title_id: string;
-//   current_chapter: number;
-//   total_chapters: number;
-//   progress_percentage: number;
-//   created_at: string;
-//   updated_at: string;
-//   titles?: Title;
-// }
