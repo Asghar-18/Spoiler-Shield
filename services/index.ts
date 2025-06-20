@@ -1,6 +1,6 @@
 // Export all API services for easy importing
 export { authApiClientMethods } from './auth';
-export { chaptersService } from './chapters';
+export { chaptersApiClient } from './chapters';
 export { progressApiClient } from './progress';
 export { questionsService } from './questions';
 export { titlesApiClient } from './titles';

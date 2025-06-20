@@ -46,12 +46,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const response = await authApiClientMethods.getCurrentUser();
         if (response.success) {
           set({ user: response.data.user });
+        } else {
+          // If getting user info fails, clear tokens
+          authApiClientMethods.removeTokens();
         }
       }
 
       set({ isLoading: false, isInitialized: true });
     } catch (error) {
       console.error("Error initializing auth:", error);
+      // Clear potentially invalid tokens on error
+      authApiClientMethods.removeTokens();
       set({ user: null, isLoading: false, isInitialized: true });
     }
   },
@@ -77,7 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Sign in error:", error);
       set({ isLoading: false });
-      return { error };
+      return { error: error instanceof Error ? error.message : 'Sign in failed' };
     }
   },
 
@@ -107,7 +112,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Sign up error:", error);
       set({ isLoading: false });
-      return { error };
+      return { error: error instanceof Error ? error.message : 'Sign up failed' };
     }
   },
 
@@ -140,7 +145,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { error: null };
     } catch (error) {
       console.error("Reset password error:", error);
-      return { error };
+      return { error: error instanceof Error ? error.message : 'Password reset failed' };
     }
   },
 
@@ -161,7 +166,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error("Update profile error:", error);
       set({ isLoading: false });
-      return { error };
+      return { error: error instanceof Error ? error.message : 'Profile update failed' };
     }
   },
 
@@ -184,11 +189,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { error: response.error || 'Session refresh failed' };
       }
 
-      // Store new tokens
-      authApiClientMethods.storeTokens(
-        response.data.access_token, 
-        response.data.refresh_token
-      );
+      // Store new tokens and update API client
+      const { access_token, refresh_token } = response.data;
+      authApiClientMethods.storeTokens(access_token, refresh_token);
+      authApiClientMethods.setTokens(access_token, refresh_token);
 
       // Get updated user info
       const userResponse = await authApiClientMethods.getCurrentUser();
@@ -201,7 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.error("Session refresh error:", error);
       authApiClientMethods.removeTokens();
       set({ user: null });
-      return { error };
+      return { error: error instanceof Error ? error.message : 'Session refresh failed' };
     }
   },
 
@@ -231,4 +235,4 @@ export type ApiResponse<T> = {
 } | {
   success: false;
   error: string;
-}
+};
