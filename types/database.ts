@@ -147,3 +147,7 @@ export type InsertQuestion =
   Database["public"]["Tables"]["questions"]["Insert"];
 export type InsertUserProgress =
   Database["public"]["Tables"]["user_progress"]["Insert"];
+
+export interface QuestionWithTitle extends Question {
+  titles?: Title;
+}

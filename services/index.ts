@@ -2,7 +2,7 @@
 export { authApiClientMethods } from './auth';
 export { chaptersApiClient } from './chapters';
 export { progressApiClient } from './progress';
-export { questionsService } from './questions';
+export { questionsApiClient } from './questions';
 export { titlesApiClient } from './titles';
 
 // Re-export supabase client for direct access when needed
