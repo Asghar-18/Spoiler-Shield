@@ -1,166 +1,365 @@
-// import React, { useEffect } from 'react';
-// import { 
-//   StyleSheet, 
-//   View, 
-//   Text, 
-//   ScrollView, 
-//   RefreshControl,
-//   TouchableOpacity,
-// } from 'react-native';
-// import { useRouter } from 'expo-router';
-// import { PlusCircle } from 'lucide-react-native';
-// import { useMediaStore } from '@/store/media-store';
-// import MediaCard from '@/components/MediaCard';
-// import Button from '@/components/Button';
-// import colors from '@/constants/colors';
-// import typography from '@/constants/typography';
-// import layout from '@/constants/layout';
+import colors from "@/constants/colors";
+import layout from "@/constants/layout";
+import { titlesApiClient } from "@/services/titles";
+import { useAuthStore } from "@/store/auth-store";
+import type { Title } from "@/types/database";
+import { router } from "expo-router";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Alert, RefreshControl, ScrollView, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-// export default function LibraryScreen() {
-//   const router = useRouter();
-//   const { media, userProgress, fetchMedia, isLoading } = useMediaStore();
-//   const [refreshing, setRefreshing] = React.useState(false);
+// Import the separated components
+import AppHeader from "@/components/AppHeader";
+import BookCard from "@/components/BookCard";
+import EmptyState from "@/components/EmptyState";
+import FilterSection from "@/components/FilterSection";
+import LoadingScreen from "@/components/LoadingScreen";
+import SearchBar from "@/components/SearchBar";
 
-//   useEffect(() => {
-//     fetchMedia();
-//   }, []);
+interface HomePageState {
+  books: Title[];
+  filteredBooks: Title[];
+  searchQuery: string;
+  loading: boolean;
+  searchLoading: boolean;
+  refreshing: boolean;
+}
 
-//   const onRefresh = async () => {
-//     setRefreshing(true);
-//     await fetchMedia();
-//     setRefreshing(false);
-//   };
+export default function HomePage() {
+  const { user, signOut } = useAuthStore();
+  const [state, setState] = useState<HomePageState>({
+    books: [],
+    filteredBooks: [],
+    searchQuery: "",
+    loading: true,
+    searchLoading: false,
+    refreshing: false,
+  });
 
-//   // Filter media that has progress
-//   const mediaWithProgress = media.filter(item => 
-//     userProgress.some(progress => progress.mediaId === item.id)
-//   );
+  // Refs for cleanup
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
 
-//   // Sort by last updated
-//   const sortedMedia = [...mediaWithProgress].sort((a, b) => {
-//     const progressA = userProgress.find(p => p.mediaId === a.id);
-//     const progressB = userProgress.find(p => p.mediaId === b.id);
-    
-//     if (!progressA || !progressB) return 0;
-    
-//     return new Date(progressB.lastUpdated).getTime() - 
-//            new Date(progressA.lastUpdated).getTime();
-//   });
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
-//   const getProgress = (mediaId: string) => {
-//     const progress = userProgress.find(p => p.mediaId === mediaId);
-//     return progress ? progress.progress : 0;
-//   };
+  // Check authentication - redirect if not authenticated
+  // useEffect(() => {
+  //   if (!user) {
+  //     router.replace("/auth" as any);
+  //     return;
+  //   }
+  // }, [user]);
 
-//   const getCurrentChapter = (mediaId: string) => {
-//     const progress = userProgress.find(p => p.mediaId === mediaId);
-//     return progress ? progress.currentChapter : 0;
-//   };
+  // Load books on mount
+  useEffect(() => {
+    if (user) {
+      loadBooks();
+    }
+  }, [user]);
 
-//   const navigateToHome = () => {
-//     router.push('/(tabs)');
-//   };
+  // Handle search with debouncing
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
 
-//   return (
-//     <View style={styles.container}>
-//       <View style={styles.header}>
-//         <Text style={styles.title}>My Library</Text>
-//         <Text style={styles.subtitle}>Track your progress</Text>
-//       </View>
-      
-//       <ScrollView
-//         style={styles.scrollView}
-//         showsVerticalScrollIndicator={false}
-//         refreshControl={
-//           <RefreshControl
-//             refreshing={refreshing}
-//             onRefresh={onRefresh}
-//             colors={[colors.primary]}
-//             tintColor={colors.primary}
-//           />
-//         }
-//       >
-//         {isLoading && !refreshing ? (
-//           <Text style={styles.loadingText}>Loading...</Text>
-//         ) : sortedMedia.length === 0 ? (
-//           <View style={styles.emptyContainer}>
-//             <Text style={styles.emptyText}>Your library is empty</Text>
-//             <Text style={styles.emptySubtext}>
-//               Start tracking your progress by adding books, shows, or games
-//             </Text>
-//             <Button
-//               title="Browse Titles"
-//               onPress={navigateToHome}
-//               style={styles.browseButton}
-//               icon={<PlusCircle size={20} color="white" />}
-//             />
-//           </View>
-//         ) : (
-//           <View style={styles.mediaList}>
-//             {sortedMedia.map((item) => (
-//               <MediaCard
-//                 key={item.id}
-//                 id={item.id}
-//                 title={item.title}
-//                 type={item.type}
-//                 coverImage={item.coverImage}
-//                 progress={getProgress(item.id)}
-//                 totalChapters={item.totalChapters}
-//                 currentChapter={getCurrentChapter(item.id)}
-//               />
-//             ))}
-//           </View>
-//         )}
-//       </ScrollView>
-//     </View>
-//   );
-// }
+    debounceTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        // Only search if we have books loaded
+        if (state.books.length > 0) {
+          handleSearch();
+        }
+      }
+    }, 300);
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: colors.background,
-//     padding: layout.spacing.lg,
-//   },
-//   header: {
-//     marginBottom: layout.spacing.lg,
-//   },
-//   title: {
-//     ...typography.h1,
-//   },
-//   subtitle: {
-//     ...typography.bodySmall,
-//     color: colors.textSecondary,
-//   },
-//   scrollView: {
-//     flex: 1,
-//   },
-//   mediaList: {
-//     paddingBottom: layout.spacing.xl,
-//   },
-//   loadingText: {
-//     ...typography.body,
-//     textAlign: 'center',
-//     marginTop: layout.spacing.xl,
-//     color: colors.textSecondary,
-//   },
-//   emptyContainer: {
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     marginTop: layout.spacing.xxl,
-//     padding: layout.spacing.lg,
-//   },
-//   emptyText: {
-//     ...typography.h3,
-//     marginBottom: layout.spacing.sm,
-//   },
-//   emptySubtext: {
-//     ...typography.body,
-//     color: colors.textSecondary,
-//     textAlign: 'center',
-//     marginBottom: layout.spacing.xl,
-//   },
-//   browseButton: {
-//     marginTop: layout.spacing.md,
-//   },
-// });
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [state.searchQuery, state.books.length]);
+
+  const updateState = useCallback((updates: Partial<HomePageState>) => {
+    if (isMountedRef.current) {
+      setState((prev) => ({ ...prev, ...updates }));
+    }
+  }, []);
+
+  const loadBooks = useCallback(
+    async (isRefreshing: boolean = false) => {
+      try {
+        updateState({
+          loading: !isRefreshing,
+          refreshing: isRefreshing,
+        });
+
+        console.log("Loading books..."); // DEBUG
+        const response = await titlesApiClient.getTitles();
+        console.log("API Response:", response); // DEBUG
+
+        if (!isMountedRef.current) return;
+
+        // Check if response was successful before accessing data
+        if (response.success) {
+          const books = response.data || [];
+          console.log("Processed books:", books.length); // DEBUG
+
+          updateState({
+            books,
+            filteredBooks: books,
+            loading: false,
+            refreshing: false,
+          });
+
+          console.log("State updated with books:", books.length); // DEBUG
+        } else {
+          // Handle API error
+          console.error("API Error:", response.error);
+          Alert.alert("Error", response.error || "Failed to load books");
+          updateState({
+            loading: false,
+            refreshing: false,
+          });
+        }
+      } catch (error) {
+        if (!isMountedRef.current) return;
+
+        console.error("Error in loadBooks:", error);
+        Alert.alert("Error", "Something went wrong while loading books");
+        updateState({
+          loading: false,
+          refreshing: false,
+        });
+      }
+    },
+    [updateState]
+  );
+
+  const handleSearch = useCallback(async () => {
+    const query = state.searchQuery.trim();
+    console.log("Searching for:", query); // DEBUG
+
+    if (query === "") {
+      console.log(
+        "Empty query, setting filteredBooks to all books:",
+        state.books.length
+      ); // DEBUG
+      updateState({ filteredBooks: state.books });
+      return;
+    }
+
+    try {
+      updateState({ searchLoading: true });
+
+      console.log("Making search API call..."); // DEBUG
+      const response = await titlesApiClient.searchTitles(query);
+      console.log("Search API response:", response); // DEBUG
+
+      if (!isMountedRef.current) return;
+
+      // Check if response was successful before accessing data
+      if (response.success) {
+        const searchResults = response.data || [];
+        console.log("Processed search results:", searchResults.length); // DEBUG
+
+        updateState({
+          filteredBooks: searchResults,
+          searchLoading: false,
+        });
+      } else {
+        // Handle API error - fallback to local filtering
+        console.warn("Search API error:", response.error);
+        const localFiltered = state.books.filter(
+          (book) =>
+            book.name?.toLowerCase().includes(query.toLowerCase()) ||
+            book.author?.toLowerCase().includes(query.toLowerCase())
+        );
+        console.log("Local filtered results:", localFiltered.length); // DEBUG
+        updateState({
+          filteredBooks: localFiltered,
+          searchLoading: false,
+        });
+      }
+    } catch (error) {
+      if (!isMountedRef.current) return;
+
+      console.error("Error in handleSearch:", error);
+      // Fallback to local filtering
+      const localFiltered = state.books.filter(
+        (book) =>
+          book.name?.toLowerCase().includes(query.toLowerCase()) ||
+          book.author?.toLowerCase().includes(query.toLowerCase())
+      );
+      console.log("Local filtered results:", localFiltered.length); // DEBUG
+      updateState({
+        filteredBooks: localFiltered,
+        searchLoading: false,
+      });
+    }
+  }, [state.searchQuery, state.books, updateState]);
+
+  const handleBookPress = useCallback((book: Title) => {
+    router.push({
+      pathname: "/book/[id]" as any,
+      params: {
+        id: book.id,
+        bookName: book.name || "Untitled Book",
+        coverImage: book.coverImage || "",
+      },
+    });
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              console.log("HomePage: Starting sign out process...");
+              await signOut();
+              console.log("HomePage: Sign out completed successfully");
+              // Don't manually navigate - RootLayout will handle it
+            } catch (error) {
+              console.error("HomePage: Sign out error:", error);
+              Alert.alert("Error", "Failed to sign out. Please try again.");
+            }
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error("HomePage: Logout error:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
+  }, [signOut]);
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      updateState({ searchQuery: query });
+    },
+    [updateState]
+  );
+
+  const clearSearch = useCallback(() => {
+    updateState({
+      searchQuery: "",
+      filteredBooks: state.books,
+    });
+  }, [state.books, updateState]);
+
+  const handleRefresh = useCallback(() => {
+    loadBooks(true);
+  }, [loadBooks]);
+
+  // Show loading screen while initial data loads
+  if (state.loading) {
+    return <LoadingScreen message="Loading books..." />;
+  }
+
+  // Don't render anything if user is not authenticated
+  if (!user) {
+    return null;
+  }
+
+  // Add extra safety check before rendering
+  const booksToRender = Array.isArray(state.filteredBooks)
+    ? state.filteredBooks
+    : [];
+
+  console.log("Render - booksToRender length:", booksToRender.length); // DEBUG
+  console.log("Render - state.books length:", state.books.length); // DEBUG
+  console.log(
+    "Render - state.filteredBooks length:",
+    state.filteredBooks.length
+  ); // DEBUG
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <AppHeader
+        title="Home"
+        discoverTitle="Discover"
+        discoverSubtitle="Find stories to explore"
+        onLogout={handleLogout}
+      />
+
+      {/* Search Bar */}
+      <SearchBar
+        searchQuery={state.searchQuery}
+        onSearchChange={handleSearchChange}
+        onClear={clearSearch}
+        loading={state.searchLoading}
+        placeholder="Search books and authors..."
+      />
+
+      {/* Filter Section */}
+      <FilterSection
+        resultCount={booksToRender.length}
+        showResultCount={!!state.searchQuery.trim()}
+        filterText="Books"
+        filterIcon="book"
+      />
+
+      {/* Books List */}
+      <ScrollView
+        style={styles.booksContainer}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.booksContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={state.refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {booksToRender.length === 0 ? (
+          <EmptyState
+            title={state.searchQuery ? "No books found" : "No books available"}
+            subtitle={
+              state.searchQuery
+                ? "Try adjusting your search terms or browse all books"
+                : "Books will appear here once they are added to your library"
+            }
+            icon="book-outline"
+            showClearButton={!!state.searchQuery}
+            onClearPress={clearSearch}
+            clearButtonText="Clear search"
+          />
+        ) : (
+          booksToRender.map((book) => (
+            <BookCard key={book.id} book={book} onPress={handleBookPress} />
+          ))
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  booksContainer: {
+    flex: 1,
+  },
+  booksContent: {
+    paddingHorizontal: layout.spacing.lg,
+    paddingBottom: layout.spacing.lg,
+  },
+});

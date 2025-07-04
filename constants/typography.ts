@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import colors from './colors';
 
-export default StyleSheet.create({
+// Create a function that returns typography styles based on colors
+export const createTypography = (colors: any) => StyleSheet.create({
   h1: {
     fontSize: 28,
     fontWeight: '700',
@@ -49,4 +49,10 @@ export default StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
   },
+});
+
+// Export default for backward compatibility (you'll need to update this)
+export default createTypography({
+  text: "#1F2937",
+  textSecondary: "#6B7280",
 });

@@ -1,27 +1,26 @@
-import colors from "@/constants/colors";
 import layout from "@/constants/layout";
-import typography from "@/constants/typography";
+import { useAppStyles } from "@/hooks/useAppStyles";
 import { progressApiClient, titlesApiClient } from "@/services";
 import { useAuthStore } from "@/store/auth-store";
 import type { Title } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
 import {
-    router,
-    Stack,
-    useFocusEffect,
-    useLocalSearchParams,
+  router,
+  Stack,
+  useFocusEffect,
+  useLocalSearchParams,
 } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function BookDetailsScreen() {
@@ -34,6 +33,8 @@ export default function BookDetailsScreen() {
   const [progress, setProgress] = useState(0);
   const [currentChapter, setCurrentChapter] = useState(0);
   const [totalChapters, setTotalChapters] = useState(0);
+
+  const { colors, typography } = useAppStyles();
 
   useEffect(() => {
     if (bookId) {
@@ -74,7 +75,7 @@ export default function BookDetailsScreen() {
     }
   };
 
-const loadUserProgress = async () => {
+  const loadUserProgress = async () => {
     if (!user || !bookId) return;
 
     try {
@@ -135,6 +136,218 @@ const loadUserProgress = async () => {
     return `${progress}% complete`;
   };
 
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        loadingContainer: {
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        notFound: {
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: layout.spacing.xl,
+        },
+        notFoundText: {
+          fontSize: 20,
+          fontWeight: "600",
+          color: colors.text,
+          marginTop: layout.spacing.md,
+          marginBottom: layout.spacing.lg,
+        },
+        backButtonError: {
+          backgroundColor: colors.primary,
+          paddingHorizontal: layout.spacing.lg,
+          paddingVertical: layout.spacing.sm,
+          borderRadius: layout.borderRadius.sm,
+        },
+        backButtonText: {
+          color: colors.card,
+          fontSize: 16,
+          fontWeight: "600",
+        },
+        header: {
+          height: 300,
+          position: "relative",
+        },
+        coverImage: {
+          width: "100%",
+          height: "100%",
+        },
+        placeholderCoverImage: {
+          width: "100%",
+          height: "100%",
+          backgroundColor: colors.card,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        overlay: {
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: "rgba(0, 0, 0, 0.3)",
+        },
+        backButton: {
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: "rgba(0, 0, 0, 0.3)",
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        content: {
+          flex: 1,
+          padding: layout.spacing.lg,
+          marginTop: -40,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          backgroundColor: colors.background,
+        },
+        titleContainer: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: layout.spacing.md,
+        },
+        titleInfo: {
+          flex: 1,
+          marginRight: layout.spacing.md,
+        },
+        title: {
+          fontSize: 28,
+          fontWeight: "bold",
+          color: colors.text,
+          marginBottom: layout.spacing.xs,
+        },
+        creator: {
+          fontSize: 16,
+          color: colors.textSecondary,
+        },
+        typeContainer: {
+          backgroundColor: colors.primaryLight,
+          paddingVertical: layout.spacing.xs,
+          paddingHorizontal: layout.spacing.sm,
+          borderRadius: layout.borderRadius.md,
+        },
+        typeText: {
+          fontSize: 12,
+          color: colors.card,
+          fontWeight: "600",
+        },
+        genreContainer: {
+          flexDirection: "row",
+          flexWrap: "wrap",
+          marginBottom: layout.spacing.lg,
+        },
+        genreTag: {
+          backgroundColor: colors.primary + "20",
+          paddingVertical: layout.spacing.xs,
+          paddingHorizontal: layout.spacing.sm,
+          borderRadius: layout.borderRadius.md,
+          marginRight: layout.spacing.xs,
+          marginBottom: layout.spacing.xs,
+        },
+        genreText: {
+          fontSize: 12,
+          color: colors.primary,
+          fontWeight: "500",
+        },
+        progressCard: {
+          backgroundColor: colors.card,
+          padding: layout.spacing.lg,
+          borderRadius: layout.borderRadius.md,
+          marginBottom: layout.spacing.lg,
+          shadowColor: colors.shadow,
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.1,
+          shadowRadius: 3.84,
+          elevation: 5,
+        },
+        progressHeader: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: layout.spacing.md,
+        },
+        progressTitle: {
+          fontSize: 18,
+          fontWeight: "600",
+          color: colors.text,
+        },
+        updateText: {
+          fontSize: 14,
+          color: colors.primary,
+          fontWeight: "600",
+        },
+        progressBar: {
+          height: 8,
+          backgroundColor: colors.background,
+          borderRadius: 4,
+          marginBottom: layout.spacing.sm,
+          overflow: "hidden",
+        },
+        progressFill: {
+          height: "100%",
+          backgroundColor: colors.primary,
+          borderRadius: 4,
+        },
+        progressStatus: {
+          fontSize: 14,
+          color: colors.textSecondary,
+        },
+        sectionTitle: {
+          fontSize: 20,
+          fontWeight: "600",
+          color: colors.text,
+          marginBottom: layout.spacing.md,
+        },
+        description: {
+          fontSize: 16,
+          color: colors.text,
+          lineHeight: 24,
+          marginBottom: layout.spacing.xl,
+        },
+        actionButtons: {
+          marginBottom: layout.spacing.xxl,
+        },
+        actionButton: {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingVertical: layout.spacing.md,
+          borderRadius: layout.borderRadius.md,
+          gap: layout.spacing.sm,
+          marginBottom: layout.spacing.md,
+        },
+        askButton: {
+          backgroundColor: colors.primary,
+        },
+        askButtonText: {
+          color: colors.card,
+          fontSize: 16,
+          fontWeight: "600",
+        },
+        progressButton: {
+          backgroundColor: "transparent",
+          borderWidth: 2,
+          borderColor: colors.primary,
+        },
+        progressButtonText: {
+          color: colors.primary,
+          fontSize: 16,
+          fontWeight: "600",
+        },
+      }),
+    [colors, typography]
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -166,11 +379,9 @@ const loadUserProgress = async () => {
         options={{
           title: "",
           headerTransparent: true,
-          headerTintColor: "white",
-          headerTitleStyle: {
-            ...typography.h3,
-            color: "white",
-          },
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.primary,
+          headerTitleStyle: { ...typography.h3, fontWeight: "600" },
           headerLeft: () => (
             <TouchableOpacity
               style={styles.backButton}
@@ -268,211 +479,3 @@ const loadUserProgress = async () => {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  notFound: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: layout.spacing.xl,
-  },
-  notFoundText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: colors.text,
-    marginTop: layout.spacing.md,
-    marginBottom: layout.spacing.lg,
-  },
-  backButtonError: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: layout.spacing.lg,
-    paddingVertical: layout.spacing.sm,
-    borderRadius: layout.borderRadius.sm,
-  },
-  backButtonText: {
-    color: colors.card,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  header: {
-    height: 300,
-    position: "relative",
-  },
-  coverImage: {
-    width: "100%",
-    height: "100%",
-  },
-  placeholderCoverImage: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: colors.card,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: {
-    flex: 1,
-    padding: layout.spacing.lg,
-    marginTop: -40,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: colors.background,
-  },
-  titleContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: layout.spacing.md,
-  },
-  titleInfo: {
-    flex: 1,
-    marginRight: layout.spacing.md,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: layout.spacing.xs,
-  },
-  creator: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  typeContainer: {
-    backgroundColor: colors.primary,
-    paddingVertical: layout.spacing.xs,
-    paddingHorizontal: layout.spacing.sm,
-    borderRadius: layout.borderRadius.md,
-  },
-  typeText: {
-    fontSize: 12,
-    color: colors.card,
-    fontWeight: "600",
-  },
-  genreContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: layout.spacing.lg,
-  },
-  genreTag: {
-    backgroundColor: colors.primary + "20",
-    paddingVertical: layout.spacing.xs,
-    paddingHorizontal: layout.spacing.sm,
-    borderRadius: layout.borderRadius.md,
-    marginRight: layout.spacing.xs,
-    marginBottom: layout.spacing.xs,
-  },
-  genreText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: "500",
-  },
-  progressCard: {
-    backgroundColor: colors.card,
-    padding: layout.spacing.lg,
-    borderRadius: layout.borderRadius.md,
-    marginBottom: layout.spacing.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: layout.spacing.md,
-  },
-  progressTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  updateText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: colors.background,
-    borderRadius: 4,
-    marginBottom: layout.spacing.sm,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-  },
-  progressStatus: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: layout.spacing.md,
-  },
-  description: {
-    fontSize: 16,
-    color: colors.text,
-    lineHeight: 24,
-    marginBottom: layout.spacing.xl,
-  },
-  actionButtons: {
-    marginBottom: layout.spacing.xxl,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: layout.spacing.md,
-    borderRadius: layout.borderRadius.md,
-    gap: layout.spacing.sm,
-    marginBottom: layout.spacing.md,
-  },
-  askButton: {
-    backgroundColor: colors.primary,
-  },
-  askButtonText: {
-    color: colors.card,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  progressButton: {
-    backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  progressButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

@@ -1,11 +1,10 @@
-import colors from "@/constants/colors";
+import { useAppStyles } from "@/hooks/useAppStyles";
 import layout from "@/constants/layout";
-import typography from "@/constants/typography";
 import { questionsApiClient, progressApiClient } from "@/services";
 import { useAuthStore } from "@/store/auth-store";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -19,8 +18,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { QuestionWithTitle } from "@/types/database"; // Make sure this is correctly exported
 
-export default function AskQuestionsScreen() {
+export default function ChatScreen() {
   const params = useLocalSearchParams();
   const { user } = useAuthStore();
   const bookId = params.id as string;
@@ -30,154 +30,313 @@ export default function AskQuestionsScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProgress, setUserProgress] = useState<number>(0);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
+  const [history, setHistory] = useState<QuestionWithTitle[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const exampleQuestions = [
-    "Who is this character?",
-    "What happened in chapter 3?",
-    "Why did they make that decision?",
-  ];
-
-  // Load user progress when component mounts
-  useEffect(() => {
-    loadUserProgress();
-  }, [bookId, user]);
+  const { colors, typography } = useAppStyles();
 
   const loadUserProgress = async () => {
-    if (!user || !bookId) {
-      setIsLoadingProgress(false);
-      return;
-    }
-
+    if (!user || !bookId) return;
     try {
       setIsLoadingProgress(true);
       const response = await progressApiClient.getProgressByTitle(bookId);
-      
-      if (response.success && response.data) {
-        // Use current_chapter as the chapter limit, default to 0 if no progress
-        setUserProgress(response.data.current_chapter || 0);
-      } else {
-        // No progress found, user hasn't started yet
-        setUserProgress(0);
-      }
+      setUserProgress(
+        (response.success && response.data?.current_chapter) || 0
+      );
     } catch (error) {
-      console.error("Error loading user progress:", error);
-      // Default to 0 on error
+      console.error("Error loading progress:", error);
       setUserProgress(0);
     } finally {
       setIsLoadingProgress(false);
     }
   };
 
-  const handleSubmitQuestion = async () => {
-    if (!question.trim()) {
-      Alert.alert("Error", "Please enter a question");
-      return;
+  const loadChatHistory = async () => {
+    if (!user || !bookId) return;
+    try {
+      setIsLoadingHistory(true);
+      const response = await questionsApiClient.getQuestionsByTitle(bookId);
+      if (response.success && response.data) {
+        // Sort by created_at to ensure consistent chronological order (oldest first)
+        const sortedHistory = response.data.sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        setHistory(sortedHistory);
+      } else {
+        setHistory([]);
+      }
+    } catch (error) {
+      console.error("Error loading history:", error);
+      setHistory([]);
+    } finally {
+      setIsLoadingHistory(false);
     }
+  };
+
+  useEffect(() => {
+    loadUserProgress();
+    loadChatHistory();
+  }, [bookId, user]);
+
+  // Scroll to bottom when history loads or updates
+  useEffect(() => {
+    if (!isLoadingHistory && history.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [history, isLoadingHistory]);
+
+  const handleSubmitQuestion = async () => {
+    if (!question.trim()) return;
 
     if (!user) {
-      Alert.alert("Error", "You must be logged in to ask questions");
+      Alert.alert("Error", "You must be logged in to ask questions.");
       return;
     }
 
-    // Check if user has made progress
     if (userProgress === 0) {
-      Alert.alert(
-        "No Progress Yet", 
-        "You haven't started reading this book yet. Please set your progress first to ask questions.",
-        [
-          {
-            text: "Set Progress",
-            onPress: () => {
-              router.push({
-                pathname: "/book/[id]/set-progress" as any,
-                params: { id: bookId },
-              });
-            },
-          },
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-        ]
-      );
+      Alert.alert("No Progress Yet", "Please set your progress first.");
       return;
     }
+
+    const tempQuestion = {
+      id: Date.now().toString(),
+      user_id: user.id,
+      title_id: bookId,
+      chapter_limit: userProgress,
+      question_text: question.trim(),
+      answer_text: null,
+      status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
     try {
       setIsSubmitting(true);
 
+      // Add to the end of history (chronological order)
+      setHistory((prev) => [...prev, tempQuestion as QuestionWithTitle]);
+      setQuestion("");
+
+      // Scroll to bottom after adding the question
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
       const response = await questionsApiClient.createQuestion({
         title_id: bookId,
-        question_text: question.trim(),
-        chapter_limit: userProgress, // Use user's current chapter as limit
+        question_text: tempQuestion.question_text,
+        chapter_limit: userProgress,
       });
 
-      if (response.success) {
-        Alert.alert(
-          "Question Submitted",
-          `Your question has been submitted successfully. Answers will be limited to chapter ${userProgress}. You'll be notified when it's answered.`,
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                setQuestion("");
-                router.back();
-              },
-            },
-          ]
+      if (!response.success) {
+        Alert.alert("Error", response.error || "Failed to submit.");
+        setHistory((prev) =>
+          prev.filter((item) => item.id !== tempQuestion.id)
         );
-      } else {
-        Alert.alert("Error", response.error || "Failed to submit question");
+        return;
+      }
+
+      // 🔥 NEW: Update the temporary question with the real ID
+      const realQuestionId = response.data.id;
+      setHistory((prev) =>
+        prev.map((item) =>
+          item.id === tempQuestion.id ? { ...item, id: realQuestionId } : item
+        )
+      );
+
+      // 🔥 NEW: Trigger AI answer generation
+      try {
+        // Update status to show we're generating answer
+        setHistory((prev) =>
+          prev.map((item) =>
+            item.id === realQuestionId
+              ? { ...item, status: "pending", answer_text: "Thinking..." }
+              : item
+          )
+        );
+
+        await questionsApiClient.generateAnswer(realQuestionId);
+
+        // 🔥 NEW: Poll for the answer
+        await pollForAnswer(realQuestionId);
+      } catch (aiError) {
+        console.error("AI generation failed:", aiError);
+
+        // Update status to show failure
+        setHistory((prev) =>
+          prev.map((item) =>
+            item.id === realQuestionId
+              ? {
+                  ...item,
+                  status: "failed",
+                  answer_text: "Failed to generate answer. Please try again.",
+                }
+              : item
+          )
+        );
       }
     } catch (error) {
-      console.error("Error submitting question:", error);
-      Alert.alert("Error", "Something went wrong. Please try again.");
+      Alert.alert("Error", "Something went wrong.");
+      setHistory((prev) => prev.filter((item) => item.id !== tempQuestion.id));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleExampleQuestionPress = (exampleQuestion: string) => {
-    setQuestion(exampleQuestion);
+  // 🔥 NEW: Add polling function
+  const pollForAnswer = async (questionId: string) => {
+    const maxAttempts = 60; // 60 seconds max
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await questionsApiClient.getQuestionById(questionId);
+        if (response.success && response.data) {
+          const question = response.data;
+
+          // Update the history with the latest question data
+          setHistory((prev) =>
+            prev.map((q) => (q.id === questionId ? question : q))
+          );
+
+          // Return true if we have an answer or if it failed
+          return question.answer_text || question.status === "failed";
+        }
+        return false;
+      } catch (error) {
+        console.error("Polling error:", error);
+        return false;
+      }
+    };
+
+    while (attempts < maxAttempts) {
+      const completed = await poll();
+      if (completed) break;
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    // If we've exhausted attempts, mark as failed
+    if (attempts >= maxAttempts) {
+      setHistory((prev) =>
+        prev.map((q) =>
+          q.id === questionId
+            ? {
+                ...q,
+                status: "failed",
+                answer_text: "Answer generation timed out.",
+              }
+            : q
+        )
+      );
+    }
   };
 
-  const getProgressText = () => {
-    if (isLoadingProgress) {
-      return "Loading your progress...";
-    }
-    
-    if (userProgress === 0) {
-      return "You haven't started this book yet";
-    }
-    
-    return `You're at chapter ${userProgress}`;
-  };
-
-  const getNoticeText = () => {
-    if (isLoadingProgress) {
-      return "Loading progress information...";
-    }
-    
-    if (userProgress === 0) {
-      return "Set your progress first to ask spoiler-free questions";
-    }
-    
-    return `Answers will be filtered to chapter ${userProgress} and earlier`;
-  };
+  const styles = useMemo(
+      () => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    keyboardAvoidingView: {
+      flex: 1,
+    },
+    backButton: {
+      padding: layout.spacing.xs,
+    },
+    scrollView: {
+      flex: 1,
+      paddingHorizontal: layout.spacing.lg,
+    },
+    scrollContent: {
+      paddingBottom: layout.spacing.xl,
+    },
+    bookTitle: {
+      ...typography.h3,
+      color: colors.text,
+      marginTop: layout.spacing.lg,
+      marginBottom: layout.spacing.sm,
+    },
+    progressNotice: {
+      ...typography.bodySmall,
+      color: colors.textSecondary,
+      marginBottom: layout.spacing.md,
+    },
+    noMessages: {
+      ...typography.body,
+      color: colors.textSecondary,
+      textAlign: "center",
+      marginTop: layout.spacing.lg,
+    },
+    chatItem: {
+      marginBottom: layout.spacing.md,
+    },
+    userBubble: {
+      alignSelf: "flex-end",
+      backgroundColor: colors.userChat,
+      borderRadius: 12,
+      padding: 10,
+      maxWidth: "80%",
+    },
+    aiBubble: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.aiChat, 
+      borderRadius: 12,
+      padding: 10,
+      maxWidth: "80%",
+      marginTop: 4,
+    },
+    bubbleText: {
+      ...typography.body,
+      color: colors.text,
+    },
+    inputContainer: {
+      flexDirection: "row",
+      padding: layout.spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    textInput: {
+      flex: 1,
+      ...typography.body,
+      color: colors.text,
+      paddingVertical: layout.spacing.sm,
+      paddingHorizontal: layout.spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: 20,
+      maxHeight: 120,
+    },
+    submitButton: {
+      backgroundColor: colors.primary,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      marginLeft: layout.spacing.sm,
+    },
+    submitButtonDisabled: {
+      backgroundColor: colors.textSecondary,
+      opacity: 0.6,
+    },
+  }),
+  [colors, typography]
+  );
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Ask Questions",
-          headerStyle: {
-            backgroundColor: colors.background,
-          },
+          title: "Chat",
+          headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.primary,
-          headerTitleStyle: {
-            ...typography.h3,
-            fontWeight: "600",
-          },
+          headerTitleStyle: { ...typography.h3, fontWeight: "600" },
           headerLeft: () => (
             <TouchableOpacity
               style={styles.backButton}
@@ -188,121 +347,78 @@ export default function AskQuestionsScreen() {
           ),
         }}
       />
-
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Book Info */}
-            <View style={styles.bookInfo}>
-              <Text style={styles.bookTitle}>{bookName}</Text>
-              <Text style={styles.bookStatus}>{getProgressText()}</Text>
-            </View>
+            {/* Header Info */}
+            <Text style={styles.bookTitle}>{bookName}</Text>
+            <Text style={styles.progressNotice}>
+              {isLoadingProgress
+                ? "Loading progress..."
+                : `Answers limited to chapter ${userProgress}`}
+            </Text>
 
-            {/* Progress Notice */}
-            <View style={[
-              styles.progressNotice,
-              userProgress === 0 && styles.progressNoticeWarning
-            ]}>
-              <View style={styles.noticeIcon}>
-                <Ionicons
-                  name={userProgress === 0 ? "warning" : "information-circle"}
-                  size={20}
-                  color={userProgress === 0 ? colors.error : colors.warning}
-                />
-              </View>
-              <View style={styles.noticeContent}>
-                <Text style={[
-                  styles.noticeText,
-                  userProgress === 0 && styles.noticeTextWarning
-                ]}>
-                  {getNoticeText()}
-                </Text>
-                {userProgress === 0 && (
-                  <TouchableOpacity
-                    style={styles.setProgressButton}
-                    onPress={() => router.push({
-                      pathname: "/book/[id]/set-progress" as any,
-                      params: { id: bookId },
-                    })}
-                  >
-                    <Text style={styles.setProgressButtonText}>Set Progress</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* Main Content */}
-            <View style={styles.mainContent}>
-              <Text style={styles.mainTitle}>
-                {userProgress === 0 ? "Set Your Progress First" : "Ask Your Question"}
+            {/* Chat Messages */}
+            {isLoadingHistory ? (
+              <ActivityIndicator size="small" />
+            ) : history.length === 0 ? (
+              <Text style={styles.noMessages}>
+                No questions yet. Ask your first one!
               </Text>
-              <Text style={styles.mainDescription}>
-                {userProgress === 0 
-                  ? `Set your reading progress for ${bookName} to start asking spoiler-free questions about the story.`
-                  : `Ask anything about ${bookName} without worrying about spoilers. We'll only reveal information up to chapter ${userProgress}.`
-                }
-              </Text>
-
-              {/* Example Questions - Only show if user has progress */}
-              {userProgress > 0 && (
-                <View style={styles.exampleSection}>
-                  <Text style={styles.exampleTitle}>Example questions:</Text>
-                  <View style={styles.exampleList}>
-                    {exampleQuestions.map((example, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.exampleItem}
-                        onPress={() => handleExampleQuestionPress(example)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.exampleBullet} />
-                        <Text style={styles.exampleText}>{example}</Text>
-                      </TouchableOpacity>
-                    ))}
+            ) : (
+              history.map((item) => (
+                <View key={item.id} style={styles.chatItem}>
+                  {/* User Message */}
+                  <View style={styles.userBubble}>
+                    <Text style={styles.bubbleText}>{item.question_text}</Text>
                   </View>
+
+                  {/* AI Answer */}
+                  {item.answer_text && (
+                    <View style={styles.aiBubble}>
+                      <Text style={styles.bubbleText}>{item.answer_text}</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
+              ))
+            )}
           </ScrollView>
 
-          {/* Question Input - Only show if user has progress */}
+          {/* Input Bar */}
           {userProgress > 0 && (
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Ask a question..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={question}
-                  onChangeText={setQuestion}
-                  multiline
-                  maxLength={500}
-                  editable={!isSubmitting && !isLoadingProgress}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.submitButton,
-                    (!question.trim() || isSubmitting || isLoadingProgress) && styles.submitButtonDisabled,
-                  ]}
-                  onPress={handleSubmitQuestion}
-                  disabled={!question.trim() || isSubmitting || isLoadingProgress}
-                  activeOpacity={0.7}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color={colors.card} />
-                  ) : (
-                    <Ionicons name="send" size={20} color={colors.card} />
-                  )}
-                </TouchableOpacity>
-              </View>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Ask something..."
+                placeholderTextColor={colors.textSecondary}
+                value={question}
+                onChangeText={setQuestion}
+                multiline
+                editable={!isSubmitting}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  (!question.trim() || isSubmitting) &&
+                    styles.submitButtonDisabled,
+                ]}
+                onPress={handleSubmitQuestion}
+                disabled={!question.trim() || isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={colors.card} />
+                ) : (
+                  <Ionicons name="send" size={20} color={colors.card} />
+                )}
+              </TouchableOpacity>
             </View>
           )}
         </KeyboardAvoidingView>
@@ -311,159 +427,3 @@ export default function AskQuestionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  backButton: {
-    padding: layout.spacing.xs,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: layout.spacing.lg,
-    paddingBottom: layout.spacing.xl,
-  },
-  bookInfo: {
-    paddingVertical: layout.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: layout.spacing.lg,
-  },
-  bookTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginBottom: layout.spacing.xs,
-  },
-  bookStatus: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  progressNotice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: colors.warning + "15",
-    padding: layout.spacing.md,
-    borderRadius: layout.borderRadius.md,
-    marginBottom: layout.spacing.xl,
-  },
-  progressNoticeWarning: {
-    backgroundColor: colors.error + "15",
-  },
-  noticeIcon: {
-    marginRight: layout.spacing.sm,
-    marginTop: 2,
-  },
-  noticeContent: {
-    flex: 1,
-  },
-  noticeText: {
-    ...typography.bodySmall,
-    color: colors.warning,
-    lineHeight: 18,
-  },
-  noticeTextWarning: {
-    color: colors.error,
-  },
-  setProgressButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: layout.spacing.sm,
-    paddingVertical: layout.spacing.xs,
-    borderRadius: layout.borderRadius.sm,
-    marginTop: layout.spacing.sm,
-    alignSelf: "flex-start",
-  },
-  setProgressButtonText: {
-    ...typography.bodySmall,
-    color: colors.card,
-    fontWeight: "600",
-  },
-  mainContent: {
-    flex: 1,
-  },
-  mainTitle: {
-    ...typography.h2,
-    color: colors.text,
-    marginBottom: layout.spacing.md,
-    fontWeight: "700",
-  },
-  mainDescription: {
-    ...typography.body,
-    color: colors.text,
-    lineHeight: 22,
-    marginBottom: layout.spacing.xl,
-  },
-  exampleSection: {
-    marginBottom: layout.spacing.xl,
-  },
-  exampleTitle: {
-    ...typography.h4,
-    color: colors.text,
-    marginBottom: layout.spacing.md,
-    fontWeight: "600",
-  },
-  exampleList: {
-    marginLeft: layout.spacing.sm,
-  },
-  exampleItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: layout.spacing.md,
-    paddingRight: layout.spacing.md,
-  },
-  exampleBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginRight: layout.spacing.md,
-    marginTop: 8,
-  },
-  exampleText: {
-    ...typography.body,
-    color: colors.primary,
-    flex: 1,
-    lineHeight: 22,
-  },
-  inputContainer: {
-    paddingHorizontal: layout.spacing.lg,
-    paddingVertical: layout.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    backgroundColor: colors.background,
-    borderRadius: layout.borderRadius.lg,
-    paddingHorizontal: layout.spacing.md,
-    paddingVertical: layout.spacing.sm,
-    minHeight: 48,
-  },
-  textInput: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text,
-    maxHeight: 120,
-    paddingVertical: layout.spacing.sm,
-    paddingRight: layout.spacing.md,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.textSecondary,
-    opacity: 0.5,
-  },
-});

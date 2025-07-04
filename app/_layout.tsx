@@ -1,13 +1,14 @@
-import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Stack, router, useSegments } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { useAuthStore } from '../store/auth-store';
+import React, { useEffect } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { Stack, router, useSegments } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useAuthStore } from "../store/auth-store";
+import { ThemeProvider } from "../contexts/ThemeContext";
 
 export default function RootLayout() {
   const { user, isLoading, isInitialized, initialize } = useAuthStore();
-  const segments = useSegments();
+  const segments = useSegments(); 
 
   useEffect(() => {
     // Initialize auth store
@@ -18,30 +19,33 @@ export default function RootLayout() {
     // Only handle navigation after auth is initialized
     if (!isInitialized) return;
 
-    const inAuthGroup = segments[0] === 'auth' as any;
+    const inAuthGroup = segments[0] === "auth";
 
     if (user && inAuthGroup) {
       // User is authenticated and on auth pages, redirect to home
-      router.replace('/');
+      router.replace("/");
     } else if (!user && !inAuthGroup) {
       // User is not authenticated and not on auth pages, redirect to auth
-      router.replace('/auth' as any);
+      router.replace("/auth");
     }
   }, [user, segments, isInitialized]);
 
   // Show loading screen while initializing authentication
   if (!isInitialized || isLoading) {
     return (
+      <ThemeProvider>
       <SafeAreaProvider>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
         </View>
         <StatusBar style="auto" />
       </SafeAreaProvider>
+      </ThemeProvider>
     );
   }
 
   return (
+    <ThemeProvider>
     <SafeAreaProvider>
       <StatusBar style="auto" />
       <Stack
@@ -51,40 +55,48 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="auth" />
-        <Stack.Screen 
-          name="book/[id]" 
+        <Stack.Screen
+          name="(tabs)"
           options={{
-            headerShown: true,
-            headerTitle: 'Book Details',
-            headerBackTitle: 'Back',            
+            headerShown: false,
+            animation: "fade",
           }}
         />
-        <Stack.Screen 
-          name="book/[id]/ask-question" 
+        <Stack.Screen
+          name="book/[id]"
           options={{
             headerShown: true,
-            headerTitle: 'Ask a Question',
-            headerBackTitle: 'Back',
+            headerTitle: "Book Details",
+            headerBackTitle: "Back",
           }}
         />
-        <Stack.Screen 
-          name="book/[id]/set-progress" 
+        <Stack.Screen
+          name="book/[id]/ask-question"
           options={{
             headerShown: true,
-            headerTitle: 'Set Progress',
-            headerBackTitle: 'Back',
+            headerTitle: "Ask a Question",
+            headerBackTitle: "Back",
+          }}
+        />
+        <Stack.Screen
+          name="book/[id]/set-progress"
+          options={{
+            headerShown: true,
+            headerTitle: "Set Progress",
+            headerBackTitle: "Back",
           }}
         />
       </Stack>
     </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
   },
 });

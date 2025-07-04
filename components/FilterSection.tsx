@@ -1,13 +1,8 @@
-import colors from '@/constants/colors';
-import layout from '@/constants/layout';
-import typography from '@/constants/typography';
-import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import {
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import layout from "@/constants/layout";
+import { useAppStyles } from "@/hooks/useAppStyles";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 interface FilterSectionProps {
   resultCount?: number;
@@ -22,6 +17,40 @@ export default function FilterSection({
   filterText = "Books",
   filterIcon = "book",
 }: FilterSectionProps) {
+  const { colors, typography } = useAppStyles();
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        filterContainer: {
+          paddingHorizontal: layout.spacing.lg,
+          marginBottom: layout.spacing.md,
+        },
+        filterRow: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        },
+        activeFilter: {
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: colors.primary,
+          paddingHorizontal: layout.spacing.md,
+          paddingVertical: layout.spacing.sm,
+          borderRadius: layout.borderRadius.full,
+        },
+        activeFilterText: {
+          ...typography.button,
+          color: colors.card,
+          marginLeft: layout.spacing.xs,
+        },
+        resultCount: {
+          ...typography.bodySmall,
+          fontWeight: "500",
+        },
+      }),
+    [colors, typography]
+  );
   return (
     <View style={styles.filterContainer}>
       <View style={styles.filterRow}>
@@ -31,39 +60,10 @@ export default function FilterSection({
         </View>
         {showResultCount && (
           <Text style={styles.resultCount}>
-            {resultCount} result{resultCount !== 1 ? 's' : ''}
+            {resultCount} result{resultCount !== 1 ? "s" : ""}
           </Text>
         )}
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  filterContainer: {
-    paddingHorizontal: layout.spacing.lg,
-    marginBottom: layout.spacing.md,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  activeFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: layout.spacing.md,
-    paddingVertical: layout.spacing.sm,
-    borderRadius: layout.borderRadius.full,
-  },
-  activeFilterText: {
-    ...typography.button,
-    color: colors.card,
-    marginLeft: layout.spacing.xs,
-  },
-  resultCount: {
-    ...typography.bodySmall,
-    fontWeight: '500',
-  },
-});

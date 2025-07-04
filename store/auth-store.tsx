@@ -21,7 +21,7 @@ interface AuthState {
     name?: string;
     email?: string;
   }) => Promise<{ error: any }>;
-  refreshSession: () => Promise<{ error: any }>;
+  refreshSession: () => Promise<{ errori: any }>;
 
   // Internal actions
   setUser: (user: AuthUser | null) => void;

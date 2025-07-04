@@ -1,7 +1,10 @@
-import colors from "@/constants/colors";
 import layout from "@/constants/layout";
-import typography from "@/constants/typography";
-import { progressApiClient, titlesApiClient, chaptersApiClient } from "@/services";
+import { useAppStyles } from "@/hooks/useAppStyles";
+import {
+  progressApiClient,
+  titlesApiClient,
+  chaptersApiClient,
+} from "@/services";
 import { useAuthStore } from "@/store/auth-store";
 import type { Title } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,6 +43,7 @@ export default function SetProgressScreen() {
     refreshing: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const { colors, typography } = useAppStyles();
 
   // Memoized chapter list for performance
   const chapterList = useMemo(() => {
@@ -56,45 +60,47 @@ export default function SetProgressScreen() {
   }, [bookId]);
 
   // Main data loading function
-  const loadAllData = useCallback(async (isRefresh = false) => {
-    if (!user) {
-      setError("User not authenticated");
-      setLoading(prev => ({ ...prev, initial: false, refreshing: false }));
-      return;
-    }
-
-    try {
-      if (isRefresh) {
-        setLoading(prev => ({ ...prev, refreshing: true }));
-      } else {
-        setLoading(prev => ({ ...prev, initial: true }));
-      }
-      
-      setError(null);
-
-      // Load book details and chapter count in parallel
-      const [bookResponse, chapterCountResponse] = await Promise.all([
-        loadBookDetails(),
-        loadChapterCount(),
-      ]);
-
-      // Load existing progress if book loaded successfully
-      if (bookResponse.success) {
-        await loadExistingProgress();
+  const loadAllData = useCallback(
+    async (isRefresh = false) => {
+      if (!user) {
+        setError("User not authenticated");
+        setLoading((prev) => ({ ...prev, initial: false, refreshing: false }));
+        return;
       }
 
-    } catch (error) {
-      console.error("Error in loadAllData:", error);
-      setError("Failed to load data. Please try again.");
-    } finally {
-      setLoading({ initial: false, saving: false, refreshing: false });
-    }
-  }, [bookId, user]);
+      try {
+        if (isRefresh) {
+          setLoading((prev) => ({ ...prev, refreshing: true }));
+        } else {
+          setLoading((prev) => ({ ...prev, initial: true }));
+        }
+
+        setError(null);
+
+        // Load book details and chapter count in parallel
+        const [bookResponse] = await Promise.all([
+          loadBookDetails(),
+          loadChapterCount(),
+        ]);
+
+        // Load existing progress if book loaded successfully
+        if (bookResponse.success) {
+          await loadExistingProgress();
+        }
+      } catch (error) {
+        console.error("Error in loadAllData:", error);
+        setError("Failed to load data. Please try again.");
+      } finally {
+        setLoading({ initial: false, saving: false, refreshing: false });
+      }
+    },
+    [bookId, user]
+  );
 
   const loadBookDetails = async () => {
     try {
       const response = await titlesApiClient.getTitleById(bookId);
-      
+
       if (response.success && response.data) {
         setBook(response.data);
         return { success: true };
@@ -111,9 +117,9 @@ export default function SetProgressScreen() {
   };
 
   const loadChapterCount = async () => {
-    try {      
+    try {
       const response = await chaptersApiClient.getChapterCount(bookId);
-      
+
       if (response.success && response.data) {
         setTotalChapters(response.data.count || 0);
         return { success: true };
@@ -159,12 +165,12 @@ export default function SetProgressScreen() {
     }
 
     try {
-      setLoading(prev => ({ ...prev, saving: true }));
+      setLoading((prev) => ({ ...prev, saving: true }));
 
       const response = await progressApiClient.updateProgress({
         title_id: bookId,
         current_chapter: selectedChapter,
-        total_chapters: totalChapters
+        total_chapters: totalChapters,
       });
 
       if (!response.success) {
@@ -187,7 +193,7 @@ export default function SetProgressScreen() {
       console.error("Error saving progress:", error);
       Alert.alert("Error", "Something went wrong while saving progress");
     } finally {
-      setLoading(prev => ({ ...prev, saving: false }));
+      setLoading((prev) => ({ ...prev, saving: false }));
     }
   };
 
@@ -195,38 +201,228 @@ export default function SetProgressScreen() {
     loadAllData(true);
   }, [loadAllData]);
 
-  const renderChapterButton = useCallback((chapter: number) => {
-    const isSelected = selectedChapter === chapter;
-    
-    return (
-      <TouchableOpacity
-        key={chapter}
-        style={[
-          styles.chapterButton,
-          isSelected && styles.chapterButtonSelected,
-        ]}
-        onPress={() => handleChapterSelect(chapter)}
-        activeOpacity={0.7}
-      >
-        {isSelected && (
-          <Ionicons
-            name="checkmark"
-            size={16}
-            color={colors.card}
-            style={styles.checkmark}
-          />
-        )}
-        <Text
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: colors.background,
+        },
+        loadingContainer: {
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: layout.spacing.lg,
+        },
+        loadingText: {
+          ...typography.body,
+          color: colors.textSecondary,
+          marginTop: layout.spacing.md,
+        },
+        errorContainer: {
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: layout.spacing.lg,
+        },
+        errorTitle: {
+          ...typography.h3,
+          color: colors.error,
+          marginTop: layout.spacing.md,
+          marginBottom: layout.spacing.sm,
+        },
+        errorMessage: {
+          ...typography.body,
+          color: colors.textSecondary,
+          textAlign: "center",
+          marginBottom: layout.spacing.lg,
+        },
+        retryButton: {
+          backgroundColor: colors.primary,
+          paddingHorizontal: layout.spacing.lg,
+          paddingVertical: layout.spacing.md,
+          borderRadius: layout.borderRadius.md,
+        },
+        retryButtonText: {
+          ...typography.button,
+          color: colors.card,
+          fontWeight: "600",
+        },
+        backButton: {
+          padding: layout.spacing.xs,
+        },
+        content: {
+          flex: 1,
+          paddingHorizontal: layout.spacing.lg,
+        },
+        bookInfo: {
+          flexDirection: "row",
+          alignItems: "center",
+          paddingVertical: layout.spacing.lg,
+        },
+        bookImageContainer: {
+          marginRight: layout.spacing.md,
+        },
+        bookImage: {
+          width: 60,
+          height: 80,
+          borderRadius: layout.borderRadius.sm,
+        },
+        placeholderImage: {
+          width: 60,
+          height: 80,
+          borderRadius: layout.borderRadius.sm,
+          backgroundColor: colors.card,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        bookDetails: {
+          flex: 1,
+        },
+        bookTitle: {
+          ...typography.h3,
+          marginBottom: layout.spacing.xs,
+        },
+        bookType: {
+          ...typography.bodySmall,
+          color: colors.textSecondary,
+        },
+        questionSection: {
+          marginBottom: layout.spacing.lg,
+        },
+        questionTitle: {
+          ...typography.h3,
+          marginBottom: layout.spacing.sm,
+        },
+        questionSubtitle: {
+          ...typography.body,
+          color: colors.textSecondary,
+        },
+        progressIndicator: {
+          marginBottom: layout.spacing.lg,
+        },
+        progressText: {
+          ...typography.body,
+          color: colors.primary,
+          fontWeight: "600",
+        },
+        chapterSection: {
+          marginBottom: layout.spacing.xl,
+        },
+        chapterSectionTitle: {
+          ...typography.h4,
+          marginBottom: layout.spacing.lg,
+        },
+        chapterGrid: {
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        },
+        noChaptersContainer: {
+          padding: layout.spacing.lg,
+          alignItems: "center",
+        },
+        noChaptersText: {
+          ...typography.body,
+          color: colors.textSecondary,
+        },
+        chapterButton: {
+          width: "18%",
+          aspectRatio: 1,
+          backgroundColor: colors.card,
+          borderRadius: layout.borderRadius.md,
+          justifyContent: "center",
+          alignItems: "center",
+          marginBottom: layout.spacing.md,
+          borderWidth: 1,
+          borderColor: colors.border,
+          position: "relative",
+        },
+        chapterButtonSelected: {
+          backgroundColor: colors.primary,
+          borderColor: colors.primary,
+        },
+        checkmark: {
+          position: "absolute",
+          top: 4,
+          right: 4,
+        },
+        chapterText: {
+          ...typography.body,
+          fontWeight: "600",
+        },
+        chapterTextSelected: {
+          color: colors.card,
+        },
+        saveButtonContainer: {
+          paddingHorizontal: layout.spacing.lg,
+          paddingVertical: layout.spacing.md,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          backgroundColor: colors.card,
+        },
+        saveButton: {
+          backgroundColor: colors.primary,
+          borderRadius: layout.borderRadius.md,
+          paddingVertical: layout.spacing.md,
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 48,
+        },
+        saveButtonDisabled: {
+          backgroundColor: colors.border,
+        },
+        saveButtonContent: {
+          flexDirection: "row",
+          alignItems: "center",
+        },
+        saveButtonText: {
+          ...typography.button,
+          color: colors.card,
+          fontWeight: "600",
+        },
+        saveButtonTextLoading: {
+          marginLeft: layout.spacing.sm,
+        },
+      }),
+    [colors, typography]
+  );
+
+  const renderChapterButton = useCallback(
+    (chapter: number) => {
+      const isSelected = selectedChapter === chapter;
+
+      return (
+        <TouchableOpacity
+          key={chapter}
           style={[
-            styles.chapterText,
-            isSelected && styles.chapterTextSelected,
+            styles.chapterButton,
+            isSelected && styles.chapterButtonSelected,
           ]}
+          onPress={() => handleChapterSelect(chapter)}
+          activeOpacity={0.7}
         >
-          {chapter}
-        </Text>
-      </TouchableOpacity>
-    );
-  }, [selectedChapter, handleChapterSelect]);
+          {isSelected && (
+            <Ionicons
+              name="checkmark"
+              size={16}
+              color={colors.card}
+              style={styles.checkmark}
+            />
+          )}
+          <Text
+            style={[
+              styles.chapterText,
+              isSelected && styles.chapterTextSelected,
+            ]}
+          >
+            {chapter}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [selectedChapter, handleChapterSelect, styles, colors]
+  );
 
   const renderChapterGrid = () => {
     if (totalChapters === 0) {
@@ -283,7 +479,10 @@ export default function SetProgressScreen() {
           <Ionicons name="alert-circle" size={48} color={colors.error} />
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => loadAllData()}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadAllData()}
+          >
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -300,6 +499,7 @@ export default function SetProgressScreen() {
             backgroundColor: colors.background,
           },
           headerTintColor: colors.primary,
+          headerTitleStyle: { ...typography.h3, fontWeight: "600" },
           headerLeft: () => (
             <TouchableOpacity
               style={styles.backButton}
@@ -312,8 +512,8 @@ export default function SetProgressScreen() {
       />
 
       <SafeAreaView style={styles.container}>
-        <ScrollView 
-          style={styles.content} 
+        <ScrollView
+          style={styles.content}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -365,7 +565,8 @@ export default function SetProgressScreen() {
           {/* Progress Indicator */}
           <View style={styles.progressIndicator}>
             <Text style={styles.progressText}>
-              {selectedChapter} of {totalChapters} chapters ({getProgressPercentage()}%)
+              {selectedChapter} of {totalChapters} chapters (
+              {getProgressPercentage()}%)
             </Text>
           </View>
 
@@ -380,8 +581,8 @@ export default function SetProgressScreen() {
         <View style={styles.saveButtonContainer}>
           <TouchableOpacity
             style={[
-              styles.saveButton, 
-              loading.saving && styles.saveButtonDisabled
+              styles.saveButton,
+              loading.saving && styles.saveButtonDisabled,
             ]}
             onPress={handleSaveProgress}
             disabled={loading.saving}
@@ -390,7 +591,9 @@ export default function SetProgressScreen() {
             {loading.saving ? (
               <View style={styles.saveButtonContent}>
                 <ActivityIndicator size="small" color={colors.card} />
-                <Text style={[styles.saveButtonText, styles.saveButtonTextLoading]}>
+                <Text
+                  style={[styles.saveButtonText, styles.saveButtonTextLoading]}
+                >
                   Saving...
                 </Text>
               </View>
@@ -403,186 +606,3 @@ export default function SetProgressScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: layout.spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: layout.spacing.md,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: layout.spacing.lg,
-  },
-  errorTitle: {
-    ...typography.h3,
-    color: colors.error,
-    marginTop: layout.spacing.md,
-    marginBottom: layout.spacing.sm,
-  },
-  errorMessage: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginBottom: layout.spacing.lg,
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: layout.spacing.lg,
-    paddingVertical: layout.spacing.md,
-    borderRadius: layout.borderRadius.md,
-  },
-  retryButtonText: {
-    ...typography.button,
-    color: colors.card,
-    fontWeight: "600",
-  },
-  backButton: {
-    padding: layout.spacing.xs,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: layout.spacing.lg,
-  },
-  bookInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: layout.spacing.lg,
-  },
-  bookImageContainer: {
-    marginRight: layout.spacing.md,
-  },
-  bookImage: {
-    width: 60,
-    height: 80,
-    borderRadius: layout.borderRadius.sm,
-  },
-  placeholderImage: {
-    width: 60,
-    height: 80,
-    borderRadius: layout.borderRadius.sm,
-    backgroundColor: colors.card,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bookDetails: {
-    flex: 1,
-  },
-  bookTitle: {
-    ...typography.h3,
-    marginBottom: layout.spacing.xs,
-  },
-  bookType: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  questionSection: {
-    marginBottom: layout.spacing.lg,
-  },
-  questionTitle: {
-    ...typography.h3,
-    marginBottom: layout.spacing.sm,
-  },
-  questionSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  progressIndicator: {
-    marginBottom: layout.spacing.lg,
-  },
-  progressText: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  chapterSection: {
-    marginBottom: layout.spacing.xl,
-  },
-  chapterSectionTitle: {
-    ...typography.h4,
-    marginBottom: layout.spacing.lg,
-  },
-  chapterGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  noChaptersContainer: {
-    padding: layout.spacing.lg,
-    alignItems: "center",
-  },
-  noChaptersText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  chapterButton: {
-    width: "18%",
-    aspectRatio: 1,
-    backgroundColor: colors.card,
-    borderRadius: layout.borderRadius.md,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: layout.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    position: "relative",
-  },
-  chapterButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkmark: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-  },
-  chapterText: {
-    ...typography.body,
-    fontWeight: "600",
-  },
-  chapterTextSelected: {
-    color: colors.card,
-  },
-  saveButtonContainer: {
-    paddingHorizontal: layout.spacing.lg,
-    paddingVertical: layout.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: layout.borderRadius.md,
-    paddingVertical: layout.spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  saveButtonDisabled: {
-    backgroundColor: colors.border,
-  },
-  saveButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  saveButtonText: {
-    ...typography.button,
-    color: colors.card,
-    fontWeight: "600",
-  },
-  saveButtonTextLoading: {
-    marginLeft: layout.spacing.sm,
-  },
-});

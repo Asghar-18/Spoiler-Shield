@@ -1,8 +1,7 @@
 // utils/api.ts
 
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:3000/api' // Development
-  : 'https://your-production-domain.com/api'; // Production
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL!;
+
 
 // Token management
 let accessToken: string | null = null;

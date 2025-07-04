@@ -1,8 +1,7 @@
-import colors from "@/constants/colors";
 import layout from "@/constants/layout";
-import typography from "@/constants/typography";
+import { useAppStyles } from "@/hooks/useAppStyles";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface AppHeaderProps {
@@ -21,6 +20,41 @@ export default function AppHeader({
   onLogout,
   showLogout = true,
 }: AppHeaderProps) {
+  const { colors, typography } = useAppStyles();
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        header: {
+          paddingHorizontal: layout.spacing.lg,
+          paddingTop: layout.spacing.md,
+          paddingBottom: layout.spacing.lg,
+          backgroundColor: colors.card,
+        },
+        headerTop: {
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: layout.spacing.lg,
+        },
+        headerTitle: {
+          ...typography.h3,
+        },
+        logoutButton: {
+          padding: layout.spacing.xs,
+        },
+        discoverTitle: {
+          ...typography.h1,
+          marginBottom: layout.spacing.xs,
+        },
+        discoverSubtitle: {
+          ...typography.body,
+          color: colors.textSecondary,
+        },
+      }),
+    [colors, typography]
+  );
+
   return (
     <View style={styles.header}>
       <View style={styles.headerTop}>
@@ -41,32 +75,4 @@ export default function AppHeader({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: layout.spacing.lg,
-    paddingTop: layout.spacing.md,
-    paddingBottom: layout.spacing.lg,
-    backgroundColor: colors.card,
-  },
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: layout.spacing.lg,
-  },
-  headerTitle: {
-    ...typography.h3,
-  },
-  logoutButton: {
-    padding: layout.spacing.xs,
-  },
-  discoverTitle: {
-    ...typography.h1,
-    marginBottom: layout.spacing.xs,
-  },
-  discoverSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-});
+  
