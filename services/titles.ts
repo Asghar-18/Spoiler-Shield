@@ -12,5 +12,5 @@ export const titlesApiClient = {
   createTitle: (title: InsertTitle) => api.post<ApiResponse<Title>>('/titles', title),
   updateTitle: (id: string, updates: Partial<Title>) => api.put<ApiResponse<Title>>(`/titles/${id}`, updates),
   deleteTitle: (id: string) => api.delete(`/titles/${id}`), // Note: removed duplicate /api
-  searchTitles: (query: string) => api.get<ApiResponse<Title[]>>(`/titles/search?query=${encodeURIComponent(query)}`), // Note: removed duplicate /api
+  searchTitles: (query: string) => api.get<ApiResponse<Title[]>>(`/titles/search?q=${encodeURIComponent(query)}`), // Note: removed duplicate /api
 };
