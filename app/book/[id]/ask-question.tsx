@@ -243,7 +243,7 @@ export default function ChatScreen() {
       flex: 1,
       backgroundColor: colors.background,
     },
-    keyboardAvoidingView: {
+    contentContainer: {
       flex: 1,
     },
     backButton: {
@@ -348,10 +348,7 @@ export default function ChatScreen() {
         }}
       />
       <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
+        <View style={styles.contentContainer}>
           <ScrollView
             ref={scrollViewRef}
             style={styles.scrollView}
@@ -392,38 +389,42 @@ export default function ChatScreen() {
             )}
           </ScrollView>
 
-          {/* Input Bar */}
+          {/* Input Bar with KeyboardAvoidingView */}
           {userProgress > 0 && (
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Ask something..."
-                placeholderTextColor={colors.textSecondary}
-                value={question}
-                onChangeText={setQuestion}
-                multiline
-                editable={!isSubmitting}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  (!question.trim() || isSubmitting) &&
-                    styles.submitButtonDisabled,
-                ]}
-                onPress={handleSubmitQuestion}
-                disabled={!question.trim() || isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color={colors.card} />
-                ) : (
-                  <Ionicons name="send" size={20} color={colors.card} />
-                )}
-              </TouchableOpacity>
-            </View>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+            >
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Ask something..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={question}
+                  onChangeText={setQuestion}
+                  multiline
+                  editable={!isSubmitting}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    (!question.trim() || isSubmitting) &&
+                      styles.submitButtonDisabled,
+                  ]}
+                  onPress={handleSubmitQuestion}
+                  disabled={!question.trim() || isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <Ionicons name="send" size={20} color={colors.card} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
           )}
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </>
   );
 }
-
